@@ -7,6 +7,10 @@ target/
 dist/
 build/
 *.js.map
+*.egg-info/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
 
 # Environment & secrets
 .env

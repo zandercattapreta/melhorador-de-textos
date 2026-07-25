@@ -1,2 +1,0 @@
-[console_scripts]
-melhorador-textos = melhorador_textos.cli:main
