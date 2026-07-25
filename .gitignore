@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.venv/
+target/
+
+# Build output
+dist/
+build/
+*.js.map
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.key
+service-account*.json
+*-credentials.json
+
+# Local-only (NUNCA commitar)
+_bkps/
+_resources/
+_originais/
+_ originais/
+_docs/
+_tests/
+_temp/
+_output/
+*.zip
+*.pdf
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp

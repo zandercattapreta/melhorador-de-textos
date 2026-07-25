@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+src/melhorador_textos/__init__.py
+src/melhorador_textos/cleanup.py
+src/melhorador_textos/cli.py
+src/melhorador_textos/extraction.py
+src/melhorador_textos/languagetool_review.py
+src/melhorador_textos.egg-info/PKG-INFO
+src/melhorador_textos.egg-info/SOURCES.txt
+src/melhorador_textos.egg-info/dependency_links.txt
+src/melhorador_textos.egg-info/entry_points.txt
+src/melhorador_textos.egg-info/requires.txt
+src/melhorador_textos.egg-info/top_level.txt
+tests/test_cleanup.py
+tests/test_languagetool_review.py

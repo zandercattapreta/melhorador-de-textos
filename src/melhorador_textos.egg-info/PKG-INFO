@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: melhorador-textos
+Version: 0.1.0
+Summary: Extrai texto de PDFs de livros digitalizados e melhora a conversão (formatação e legibilidade), sem inventar conteúdo.
+Requires-Python: >=3.12
+Requires-Dist: pypdf>=5.1
+Requires-Dist: ocrmypdf>=16.0
+Requires-Dist: ftfy>=6.2
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
