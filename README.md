@@ -1,10 +1,17 @@
 # Melhorador de Textos
 
-Extrai texto de PDFs de livros digitalizados e melhora a conversão (formatação e legibilidade), sem inventar conteúdo.
+**CLI escalável** que processa N PDFs de livros digitalizados, extrai e limpa texto (formatação/legibilidade), sem IA/LLM — apenas OCR clássico + heurísticas + revisão humana.
 
 ## Estado
 
-PoC funcional: extração (nativa/OCR) + limpeza determinística + headings Markdown (H1–H4/SUMÁRIO, sem IA) + fluxo manual LanguageTool. Amostra validada: páginas **1–50** do Mesopotâmia.
+**PoC 0.2.0** funcional:
+- ✅ Batch-extract: descoberta automática + processamento sequencial de N PDFs
+- ✅ Metadados: extração de autor/título/ISBN com confiança (0.55–0.95)
+- ✅ Pipeline: extração (nativa/OCR) → limpeza → estrutura Markdown → LanguageTool
+- ✅ Testes: 61 tests (pipeline + metadata), 100% sucesso
+- ✅ Validação: 4 PDFs reais (3.5K páginas), BATCH_REPORT.json
+
+**Zero-IA:** Tesseract clássico + regras determinísticas + LT Manual Premium (sem API automática).
 
 ## Stack
 
@@ -27,12 +34,28 @@ pip install -e ".[dev]"
 
 ## Uso
 
+### Batch (novo — processamento de N PDFs)
+
 ```bash
 source .venv/bin/activate
 
+# 1. Descobre PDFs em _originais/, extrai + limpa todos com metadados automáticos
+melhorador-textos batch-extract \
+  --input-dir _originais \
+  --output-dir _output \
+  --temp-dir _temp \
+  --retry 1
+
+# Saída: _output/BATCH_REPORT.json (status de cada livro, hashes, confiança metadados)
+# + 4 × languagetool/ com original.txt + manifest.json (pronto para revisão)
+```
+
+### Single (legado — faixa de páginas)
+
+```bash
 # 1. Extrair + limpar uma faixa de páginas (gera raw.txt, cleaned.md, report.json)
 melhorador-textos extract \
-  --input "_ originais/<arquivo>.pdf" \
+  --input "_originais/<arquivo>.pdf" \
   --pages 21-30 \
   --name mesopotamia
 
@@ -40,8 +63,8 @@ melhorador-textos extract \
 melhorador-textos prepare-lt \
   --input "_output/mesopotamia/pages-021-030/cleaned.md"
 
-# 3. (manual) Revisar no editor Premium do LanguageTool em pt-BR e salvar
-#    o texto revisado como corrected.md na pasta languagetool/
+# 3. (manual) Revisar no editor Premium do LanguageTool em pt-BR
+#    Salve o texto revisado como corrected.md na pasta languagetool/
 
 # 4. Importar o corrigido e gerar o diff auditável (changes.diff)
 melhorador-textos import-lt \
@@ -80,10 +103,22 @@ _output/<doc>/pages-XXX-YYY/
 - Workflows: `/sod` `/eod` `/eow` em `.agent/workflows/`
 - Skills: `.agent/skills/golden-rules`, `.agent/skills/dod`
 
-## Documentação
+## Documentação (em `_docs/`)
 
-Índice: [`_docs/INDEX.md`](_docs/INDEX.md).  
-SADE (visão): [`_docs/integracoes/SADE.md`](_docs/integracoes/SADE.md).  
-CLI: [`_docs/operacao/CLI.md`](_docs/operacao/CLI.md).
+| Arquivo | Conteúdo |
+|---|---|
+| `INDEX.md` | Mapa do projeto |
+| `PRD.md` | Princípios (fidelidade, zero-IA, auditável) |
+| `arquitetura/AS_IS.md` | Estado real (61 testes, 4 PDFs validados, metadados) |
+| `BACKLOG.md` | P0–P2 (docs versionadas, remoto, API LanguageTool) |
+| `integracoes/LANGUAGETOOL.md` | Fluxo manual + batch + chunking automático |
 
-**Regra:** esta ferramenta **não usa IA** (sem LLM/OCR neural generativo) — só OCR clássico, heurísticas e revisão humana opcional (LanguageTool).
+**Regra de Ouro:** sem IA/LLM em nenhuma etapa.
+- ✅ OCR: Tesseract clássico (`por+eng`)
+- ✅ Limpeza: heurísticas determinísticas (ftfy, hifenização, headers)
+- ✅ Estrutura: regras simples (H1–H4 por padrão texto, não ML)
+- ✅ Revisão: LanguageTool Premium (humano revisa cada sugestão)
+
+## Licença
+
+MIT © 2026 Zander Catta Preta
