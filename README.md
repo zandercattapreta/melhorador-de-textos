@@ -20,34 +20,69 @@
 - `pypdf` (recorte + texto nativo), `ftfy` (conserto de Unicode)
 - `pytest`
 
-## Instalação
+## Instalação & Pipeline Completo
 
+**Opção 1: Script automático (recomendado)**
+```bash
+bash melhorar.sh
+```
+Faz tudo: setup deps → batch-extract → check-lt com LanguageTool local.
+
+**Opção 2: Manual**
+```bash
+# Só setup (deps + venv + LanguageTool)
+bash setup.sh
+```
+
+**Opção 3: Comandos individuais**
 ```bash
 # dependências nativas (macOS / Homebrew)
-brew install python@3.12 tesseract tesseract-lang ghostscript qpdf unpaper
+brew install python@3.12 tesseract tesseract-lang ghostscript qpdf unpaper languagetool
 
 # ambiente Python
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+
+# iniciar LanguageTool local (porta 8081)
+languagetool --http --port 8081 &
 ```
 
 ## Uso
 
-### Batch (novo — processamento de N PDFs)
+### Pipeline Completo (recomendado)
+
+```bash
+bash melhorar.sh
+```
+
+**O que faz:**
+1. ✅ Setup: verifica/instala deps, inicia LanguageTool local
+2. ✅ Batch-extract: PDFs → `cleaned.md` + metadados
+3. ✅ Check-LT: review automático com LanguageTool (localhost:8081)
+4. ✅ Saídas: `lt-local-suggestions.json`, `lt-local-corrected.md`, `lt-local-changes.diff`
+
+**Exemplo:**
+```bash
+$ bash melhorar.sh
+[INFO] Verificando deps nativas...
+[✓] Todas as deps nativas OK
+...
+[✓] LanguageTool OK (PID 12345)
+[✓] Batch-extract completo
+[✓] Check-lt completo para todos os livros
+```
+
+### Batch Extract (manual)
 
 ```bash
 source .venv/bin/activate
 
-# 1. Descobre PDFs em _originais/, extrai + limpa todos com metadados automáticos
 melhorador-textos batch-extract \
   --input-dir _originais \
   --output-dir _output \
   --temp-dir _temp \
   --retry 1
-
-# Saída: _output/BATCH_REPORT.json (status de cada livro, hashes, confiança metadados)
-# + 4 × languagetool/ com original.txt + manifest.json (pronto para revisão)
 ```
 
 ### Single (legado — faixa de páginas)
