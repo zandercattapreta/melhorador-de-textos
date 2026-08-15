@@ -48,18 +48,13 @@ zip -r "_bkps/melhorador-de-textos_${SEMANA}.zip" \
 
 ```bash
 cd "/Users/zander/Documents/_ coding/_ melhorador de textos"
-echo "=== Documentação Core ==="
-[ -f "AGENTS.md" ]              && echo "✅ AGENTS.md"              || echo "❌ AGENTS.md AUSENTE"
-[ -f "_docs/CHANGELOG.md" ]     && echo "✅ CHANGELOG.md"           || echo "❌ CHANGELOG.md AUSENTE"
-[ -f "_docs/BACKLOG.md" ]       && echo "✅ BACKLOG.md"             || echo "❌ BACKLOG.md AUSENTE"
-[ -f "README.md" ]              && echo "✅ README.md"              || echo "❌ README.md AUSENTE"
-[ -f ".agent/workflows/sod.md" ] && echo "✅ sod.md"                || echo "❌ sod.md AUSENTE"
+bash "../~scripts/docs/check-docs.sh" .
 ```
 
 **Revisão:**
-- [ ] Backlog reflete o estado real?
-- [ ] CHANGELOG cobre a semana?
-- [ ] Handovers dos módulos trabalhados atualizados?
+- [ ] `_docs/BACKLOG.md` reflete o estado real?
+- [ ] `_docs/CHANGELOG.md` cobre a semana?
+- [ ] `python -m pytest` verde se houve mudança de código?
 
 ---
 

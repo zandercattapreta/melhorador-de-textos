@@ -15,4 +15,4 @@ Consulte o DoD universal em:
 - [ ] Nesta fase (scaffold): estrutura `.agent/`, `AGENTS.md` e docs mínimas consistentes.
 - [ ] Texto processado não introduz conteúdo ausente na fonte OCR/PDF.
 - [ ] Sem secrets, `.env` ou PDFs brutos no diff.
-- [ ] `_docs/CHANGELOG.md` / `_docs/BACKLOG.md` atualizados quando a convenção ou o estado do projeto mudam.
+- [ ] `_docs/BACKLOG.md` / `_docs/CHANGELOG.md` atualizados quando a convenção ou o estado mudam; `check-docs.sh` verde.

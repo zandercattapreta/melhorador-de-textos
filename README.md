@@ -80,10 +80,10 @@ _output/<doc>/pages-XXX-YYY/
 - Workflows: `/sod` `/eod` `/eow` em `.agent/workflows/`
 - Skills: `.agent/skills/golden-rules`, `.agent/skills/dod`
 
-## Integração SADE
+## Documentação
 
-Visão, pipeline, ferramentas e contrato sugerido: [`docs/INTEGRACAO_SADE.md`](docs/INTEGRACAO_SADE.md).
-
-Mapa ZBOOKER (índices, citações, adoção futura): [`docs/ZBOOKER_FERRAMENTAS.md`](docs/ZBOOKER_FERRAMENTAS.md).
+Índice: [`_docs/INDEX.md`](_docs/INDEX.md).  
+SADE (visão): [`_docs/integracoes/SADE.md`](_docs/integracoes/SADE.md).  
+CLI: [`_docs/operacao/CLI.md`](_docs/operacao/CLI.md).
 
 **Regra:** esta ferramenta **não usa IA** (sem LLM/OCR neural generativo) — só OCR clássico, heurísticas e revisão humana opcional (LanguageTool).

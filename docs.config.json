@@ -1,0 +1,10 @@
+{
+  "docsDir": "_docs",
+  "sistemas": ["PROJETO", "MELHORADOR"],
+  "tipos": [
+    "indice", "politica", "glossario", "prd", "roadmap", "backlog",
+    "arquitetura", "as-is", "integracao", "operacao", "sessao"
+  ],
+  "foraDoEscopo": ["_historico"],
+  "semFrontmatterAinda": []
+}

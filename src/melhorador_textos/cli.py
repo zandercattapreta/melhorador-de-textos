@@ -37,18 +37,26 @@ def _slug_pages(pages: list[int]) -> str:
     return f"pages-{pages[0]:03d}-{pages[-1]:03d}"
 
 
-def _cmd_extract(args: argparse.Namespace) -> int:
-    input_pdf = Path(args.input)
-    pages = parse_page_range(args.pages)
-    doc_slug = args.name
-    out_dir = _OUTPUT_ROOT / doc_slug / _slug_pages(pages)
-    temp_dir = _TEMP_ROOT / doc_slug / _slug_pages(pages)
+def run_extract(
+    input_pdf: Path,
+    pages: list[int],
+    name: str,
+    *,
+    languages: str = "por+eng",
+    reflow: bool = True,
+    drop_leading_pages: int = 0,
+) -> dict:
+    """Executa o pipeline extract completo (extração → limpeza → estrutura).
+
+    Reutilizável pelo comando `extract` e pelo batch (`batch_extract.py`).
+    Retorna o report gravado em disco (inclui caminhos em `outputs`).
+    """
+    out_dir = _OUTPUT_ROOT / name / _slug_pages(pages)
+    temp_dir = _TEMP_ROOT / name / _slug_pages(pages)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"[extract] {input_pdf.name} páginas {pages[0]}–{pages[-1]}")
-    result = extract_pages(
-        input_pdf, pages, languages=args.languages, temp_dir=temp_dir
-    )
+    result = extract_pages(input_pdf, pages, languages=languages, temp_dir=temp_dir)
     print(f"[extract] engine={result.engine} chars={len(result.raw_text.strip())}")
 
     raw_path = out_dir / "raw.txt"
@@ -56,8 +64,8 @@ def _cmd_extract(args: argparse.Namespace) -> int:
 
     cleaned = clean_text(
         result.raw_text,
-        reflow=not args.no_reflow,
-        drop_leading_pages=args.drop_leading_pages,
+        reflow=reflow,
+        drop_leading_pages=drop_leading_pages,
     )
     # Estrutura Markdown (H1–H4 / SUMÁRIO) — heurísticas, sem IA.
     structured = apply_structure(cleaned.text)
@@ -69,9 +77,9 @@ def _cmd_extract(args: argparse.Namespace) -> int:
         "tool_version": __version__,
         "input_pdf": input_pdf.name,
         "pages": pages,
-        "drop_leading_pages": args.drop_leading_pages,
+        "drop_leading_pages": drop_leading_pages,
         "engine": result.engine,
-        "languages": args.languages,
+        "languages": languages,
         "extraction_meta": result.meta,
         "cleanup_stats": cleaned.stats,
         "cleanup_warnings": cleaned.warnings,
@@ -99,6 +107,18 @@ def _cmd_extract(args: argparse.Namespace) -> int:
     )
     for w in cleaned.warnings:
         print(f"[extract] AVISO: {w}")
+    return report
+
+
+def _cmd_extract(args: argparse.Namespace) -> int:
+    run_extract(
+        Path(args.input),
+        parse_page_range(args.pages),
+        args.name,
+        languages=args.languages,
+        reflow=not args.no_reflow,
+        drop_leading_pages=args.drop_leading_pages,
+    )
     return 0
 
 
@@ -138,6 +158,43 @@ def _cmd_import_lt(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_check_lt(args: argparse.Namespace) -> int:
+    # Import tardio: módulo só é necessário neste comando.
+    from .languagetool_local import DEFAULT_SERVER_URL, ensure_server, review_file
+
+    server_url = args.server or DEFAULT_SERVER_URL
+    if not ensure_server(server_url):
+        raise RuntimeError(
+            "servidor LanguageTool local indisponível — instale com "
+            "`brew install languagetool` ou suba com `brew services start languagetool`"
+        )
+    result = review_file(Path(args.input), server_url=server_url)
+    print(f"[check-lt] ocorrências : {result.stats['total_matches']}")
+    print(f"[check-lt] na proposta : {result.stats['applied_in_proposal']}")
+    print(f"[check-lt] sugestões   -> {result.suggestions_path}")
+    print(f"[check-lt] proposta    -> {result.corrected_path}")
+    print(f"[check-lt] diff        -> {result.diff_path}")
+    print("[check-lt] Nada foi aplicado ao cleaned.md — revise o diff.")
+    return 0
+
+
+def _cmd_batch_extract(args: argparse.Namespace) -> int:
+    # Import tardio: batch_extract importa run_extract deste módulo.
+    from .batch_extract import batch_extract
+
+    report = batch_extract(
+        Path(args.input_dir),
+        pages_spec=args.pages,
+        full=args.full,
+        languages=args.languages,
+        max_retries=args.retry,
+        resume=args.resume,
+        lt_local=not args.no_lt,
+    )
+    # Falha em algum livro → exit 1 (fail-fast já interrompeu o batch).
+    return 1 if report.failed else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="melhorador-textos",
@@ -165,6 +222,55 @@ def build_parser() -> argparse.ArgumentParser:
         help="Descarta N páginas iniciais da faixa (rosto/créditos)",
     )
     p_extract.set_defaults(func=_cmd_extract)
+
+    p_batch = sub.add_parser(
+        "batch-extract",
+        help="Processa todos os PDFs de _originais/ (saídas em _output/)",
+    )
+    p_batch.add_argument(
+        "--input-dir",
+        default="_originais",
+        help="Pasta com PDFs (padrão: _originais)",
+    )
+    p_batch.add_argument(
+        "--pages",
+        default=None,
+        help="Faixa-amostra por livro, ex.: 1-50 (padrão: 1-50)",
+    )
+    p_batch.add_argument(
+        "--full",
+        action="store_true",
+        help="Processa o livro INTEIRO (OCR integral — autorização explícita)",
+    )
+    p_batch.add_argument(
+        "--languages", default="por+eng", help="Idiomas do Tesseract (ex.: por+eng)"
+    )
+    p_batch.add_argument(
+        "--retry",
+        type=int,
+        default=1,
+        help="Tentativas por livro (padrão: 1 — fail-fast)",
+    )
+    p_batch.add_argument(
+        "--resume",
+        action="store_true",
+        help="Retoma do checkpoint, pulando livros já concluídos",
+    )
+    p_batch.add_argument(
+        "--no-lt",
+        action="store_true",
+        help="Pula a revisão automática no LanguageTool local",
+    )
+    p_batch.set_defaults(func=_cmd_batch_extract)
+
+    p_lt = sub.add_parser(
+        "check-lt", help="Revisão automática no LanguageTool LOCAL (gera proposta+diff)"
+    )
+    p_lt.add_argument("--input", required=True, help="Caminho do cleaned.md")
+    p_lt.add_argument(
+        "--server", default=None, help="URL do servidor local (padrão: localhost:8081)"
+    )
+    p_lt.set_defaults(func=_cmd_check_lt)
 
     p_prep = sub.add_parser("prepare-lt", help="Gera pacote de revisão manual do LT")
     p_prep.add_argument("--input", required=True, help="Caminho do cleaned.md")

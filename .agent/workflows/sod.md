@@ -50,8 +50,9 @@ Ler na ordem:
 
 1. `AGENTS.md`
 2. `.agent/skills/golden-rules/SKILL.md`
-3. `_docs/CHANGELOG.md` (primeiras ~40 linhas)
+3. `_docs/INDEX.md`
 4. `_docs/BACKLOG.md` (primeiras ~60 linhas)
+5. `_docs/CHANGELOG.md` (opcional, topo)
 
 **Confirmar:**
 - Ciclo A.P.A.E. ativo
