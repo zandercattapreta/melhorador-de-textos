@@ -266,6 +266,29 @@ fn save_lt_premium_creds(username: String, api_key: String) -> Result<(), String
 }
 
 #[tauri::command]
+fn discover_languagetool(app: AppHandle) -> Result<lt::DiscoverLtResult, String> {
+    let found = lt::discover_languagetool();
+    if found.found {
+        let mut s = load_lt_settings(&app);
+        s.local_url = found.url.clone();
+        let _ = save_lt_settings(app, s);
+    }
+    Ok(found)
+}
+
+#[tauri::command]
+fn list_model_offers(app: AppHandle) -> Result<Vec<gguf::CatalogOffer>, String> {
+    let root = ensure_app_data_dirs(&app)?;
+    Ok(gguf::recommended_offers(&root))
+}
+
+#[tauri::command]
+fn install_model_offer(app: AppHandle, offer_id: String) -> Result<gguf::ModelsState, String> {
+    let root = ensure_app_data_dirs(&app)?;
+    gguf::install_offer(&root, &offer_id)
+}
+
+#[tauri::command]
 fn list_gguf_models(app: AppHandle) -> Result<gguf::ModelsState, String> {
     let root = ensure_app_data_dirs(&app)?;
     gguf::refresh_catalog(&root)
@@ -657,6 +680,9 @@ pub fn run() {
             select_gguf_model,
             remove_gguf_model,
             download_gguf_model,
+            list_model_offers,
+            install_model_offer,
+            discover_languagetool,
             get_cloud_ai_settings,
             save_cloud_ai_settings,
             save_cloud_ai_key,

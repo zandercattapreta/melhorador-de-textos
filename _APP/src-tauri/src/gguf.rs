@@ -245,3 +245,78 @@ pub fn selected_path(app_data: &Path) -> Option<PathBuf> {
         None
     }
 }
+
+/// Opções recomendadas para o usuário (sem precisar saber URL).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatalogOffer {
+    pub id: String,
+    pub label: String,
+    pub detail: String,
+    pub filename: String,
+    pub url: String,
+    /// Já disponível no Mac (CoTypist / pasta do app)?
+    pub available_locally: bool,
+}
+
+pub fn recommended_offers(app_data: &Path) -> Vec<CatalogOffer> {
+    let state = refresh_catalog(app_data).unwrap_or_default();
+    let has = |name: &str| state.catalog.iter().any(|c| c.name.contains(name));
+
+    let mut offers = vec![
+        CatalogOffer {
+            id: "cotypist-gemma".into(),
+            label: "Gemma 4 (CoTypist)".into(),
+            detail: "Já no seu Mac se o CoTypist estiver instalado — recomendado.".into(),
+            filename: "gemma-4-E4B-UD-Q5_K_XL.gguf".into(),
+            url: String::new(),
+            available_locally: has("gemma-4"),
+        },
+        CatalogOffer {
+            id: "qwen-0.8b".into(),
+            label: "Qwen 0.8B (leve)".into(),
+            detail: "Pequeno e rápido — bom para testar IA local.".into(),
+            filename: "Qwen3.5-0.8B-Base.i1-Q6_K.gguf".into(),
+            url: "https://huggingface.co/mradermacher/Qwen3.5-0.8B-Base-i1-GGUF/resolve/main/Qwen3.5-0.8B-Base.i1-Q6_K.gguf".into(),
+            available_locally: has("Qwen3.5-0.8B"),
+        },
+        CatalogOffer {
+            id: "gemma-e2b".into(),
+            label: "Gemma 4 E2B (médio)".into(),
+            detail: "Equilíbrio tamanho/qualidade (download ~4–5 GB).".into(),
+            filename: "gemma-4-E2B.i1-Q6_K.gguf".into(),
+            url: "https://huggingface.co/mradermacher/gemma-4-E2B-i1-GGUF/resolve/main/gemma-4-E2B.i1-Q6_K.gguf".into(),
+            available_locally: has("gemma-4-E2B") || has("E2B"),
+        },
+    ];
+    // Se CoTypist não tem o arquivo, marca unavailable
+    if !offers[0].available_locally {
+        offers[0].detail =
+            "Instale o CoTypist ou baixe outro modelo da lista.".into();
+    }
+    offers
+}
+
+/// Usa oferta: se local (CoTypist), só seleciona; se URL, baixa.
+pub fn install_offer(app_data: &Path, offer_id: &str) -> Result<ModelsState, String> {
+    let offers = recommended_offers(app_data);
+    let offer = offers
+        .into_iter()
+        .find(|o| o.id == offer_id)
+        .ok_or_else(|| "Opção desconhecida".to_string())?;
+    if offer.id == "cotypist-gemma" {
+        let mut state = refresh_catalog(app_data)?;
+        let name = state
+            .catalog
+            .iter()
+            .find(|c| c.source == "cotypist" && c.name.to_lowercase().contains("gemma"))
+            .map(|c| c.name.clone())
+            .ok_or("Gemma do CoTypist não encontrado neste Mac")?;
+        state.selected = Some(name);
+        save_state(app_data, &state)?;
+        return Ok(state);
+    }
+    if offer.url.is_empty() {
+        return Err("Esta opção não tem download automático".into());
+    }
+    download_model(app_data, &offer.url, &offer.filename, None)
+}

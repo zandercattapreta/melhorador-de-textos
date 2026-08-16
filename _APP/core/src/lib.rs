@@ -90,7 +90,10 @@ pub fn clean_and_structure_pages_with_rules(
         let mut structured = structure::apply_structure_enhanced(&after_rules);
         let (annotated, _) = blocks::annotate_blocks(&structured.text);
         structured.text = annotated;
-        pages.push(structured.text);
+        // Conferência: nunca deixar a página “muda”. Se só sobrou [figura]/vazio,
+        // mostra o bruto da fatia ou um aviso claro em PT-BR.
+        let page_out = conference_page_text(&structured.text, slice);
+        pages.push(page_out);
     }
     let (full, cleanup) = clean_and_structure_enhanced_with_rules(raw_text, user_rules);
     PagesResult {
@@ -98,6 +101,25 @@ pub fn clean_and_structure_pages_with_rules(
         full,
         cleanup,
     }
+}
+
+/// Texto da página para o painel de conferência (humano, sempre legível).
+fn conference_page_text(structured: &str, raw_slice: &str) -> String {
+    let t = structured.trim();
+    let raw = raw_slice.trim();
+    let only_figura = t.is_empty() || t == "[figura]" || t.starts_with("[figura]");
+    if !only_figura {
+        return structured.to_string();
+    }
+    // Ainda há algo no bruto (OCR/nativo antes da limpeza)?
+    let raw_alnum = raw.chars().filter(|c| c.is_alphanumeric()).count();
+    if raw_alnum >= 8 {
+        return format!(
+            "(Texto bruto desta página — a limpeza removeu quase tudo)\n\n{raw}"
+        );
+    }
+    "(Esta página não tem texto capturado — no original é só imagem ou está quase vazia.)"
+        .to_string()
 }
 
 #[cfg(test)]

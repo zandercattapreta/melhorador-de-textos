@@ -109,8 +109,8 @@ pub fn propose_heuristic_review(text: &str) -> ReviewReport {
     ReviewReport {
         proposals,
         vocabulary,
-        engine: "heuristic".into(),
-        note: "Revisão local sem LLM. Ligue um modelo GGUF depois (R5 completo) para mais propostas. Nada é aplicado sem você aceitar.".into(),
+        engine: "basico".into(),
+        note: "Correções simples (espaços etc.). Para mais, use LanguageTool ou IA.".into(),
     }
 }
 
@@ -177,16 +177,16 @@ pub fn propose_llama_review(text: &str, model_path: &std::path::Path) -> ReviewR
     let vocabulary = extract_vocabulary(text, 80);
     let mut base = propose_heuristic_review(text);
     if !model_path.is_file() {
-        base.engine = "heuristic".into();
-        base.note = "Modelo GGUF ausente — só heurística.".into();
+        base.note = "Nenhum modelo de IA local selecionado. Use LanguageTool, ou escolha um modelo em Opções.".into();
+        base.engine = "basico".into();
         return base;
     }
     let bin = ["llama-cli", "llama-completion", "main"]
         .into_iter()
         .find(|b| std::process::Command::new(b).arg("--version").output().is_ok());
     let Some(bin) = bin else {
-        base.note = "llama-cli não encontrado. O modelo Gemma do CoTypist já está detectado; para usá-lo na revisão, instale llama.cpp (ex.: brew install llama.cpp) ou baixe llama-cli.".into();
-        base.engine = "heuristic+unavailable_llm".into();
+        base.note = "A IA local ainda não está pronta neste computador. O modelo Gemma foi encontrado, mas falta o programa que o executa. Por enquanto use LanguageTool.".into();
+        base.engine = "ia-local-indisponivel".into();
         return base;
     };
     let prompt = fidelity_prompt(text, &vocabulary);
@@ -207,22 +207,20 @@ pub fn propose_llama_review(text: &str, model_path: &std::path::Path) -> ReviewR
             let stdout = String::from_utf8_lossy(&o.stdout);
             let mut llm = parse_llm_proposals(text, &stdout);
             base.proposals.append(&mut llm);
-            base.engine = format!("heuristic+{bin}");
-            base.note = "IA local com o modelo selecionado (Gemma do CoTypist ou outro .gguf). Nada aplicado sem você aceitar.".into();
+            base.engine = "ia-local".into();
+            base.note = "Sugestões da IA local. Nada entra no texto sem você aceitar.".into();
             base.vocabulary = vocabulary;
             base
         }
         Ok(o) => {
-            base.engine = "heuristic+llm_error".into();
-            base.note = format!(
-                "LLM falhou: {}",
-                String::from_utf8_lossy(&o.stderr).chars().take(200).collect::<String>()
-            );
+            base.engine = "ia-local-erro".into();
+            base.note = "A IA local falhou ao revisar. Tente LanguageTool ou tente de novo.".into();
+            let _ = o;
             base
         }
-        Err(e) => {
-            base.engine = "heuristic+llm_error".into();
-            base.note = format!("Não executei {bin}: {e}");
+        Err(_e) => {
+            base.engine = "ia-local-erro".into();
+            base.note = "Não foi possível iniciar a IA local. Use LanguageTool por enquanto.".into();
             base
         }
     }

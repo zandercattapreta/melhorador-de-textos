@@ -7,6 +7,7 @@
 
 use melhorador_core::review::DiffProposal;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::process::Command;
 
 pub const DEFAULT_LT_URL: &str = "http://localhost:8081";
@@ -58,7 +59,7 @@ pub fn ensure_server(server_url: &str) -> Result<(), String> {
         return Ok(());
     }
     let binary = which("languagetool-server").ok_or_else(|| {
-        "LanguageTool local não encontrado. No Mac: brew install languagetool && brew services start languagetool".to_string()
+        "LanguageTool não encontrado neste Mac. Instale pelo site languagetool.org ou: brew install languagetool".to_string()
     })?;
     let port = url_port(server_url).unwrap_or(8081);
     Command::new(binary)
@@ -79,7 +80,65 @@ pub fn ensure_server(server_url: &str) -> Result<(), String> {
     ))
 }
 
-fn which(cmd: &str) -> Option<std::path::PathBuf> {
+/// Descobre LanguageTool no Mac e devolve URL pronta.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoverLtResult {
+    pub found: bool,
+    pub url: String,
+    pub detail: String,
+}
+
+pub fn discover_languagetool() -> DiscoverLtResult {
+    let default_url = DEFAULT_LT_URL.to_string();
+    if server_is_up(&default_url) {
+        return DiscoverLtResult {
+            found: true,
+            url: default_url,
+            detail: "LanguageTool já está rodando neste Mac.".into(),
+        };
+    }
+    if which("languagetool-server").is_some() {
+        match ensure_server(&default_url) {
+            Ok(()) => {
+                return DiscoverLtResult {
+                    found: true,
+                    url: default_url,
+                    detail: "LanguageTool encontrado e iniciado.".into(),
+                };
+            }
+            Err(e) => {
+                return DiscoverLtResult {
+                    found: false,
+                    url: default_url,
+                    detail: e,
+                };
+            }
+        }
+    }
+    // App "LanguageTool for Desktop" existe mas sem API local
+    let desktop = PathBuf::from("/Applications/LanguageTool.app");
+    let desktop_alt = dirs_home()
+        .map(|h| h.join("Library/Application Support/LanguageTool for Desktop"))
+        .filter(|p| p.exists());
+    if desktop.exists() || desktop_alt.is_some() {
+        return DiscoverLtResult {
+            found: false,
+            url: default_url,
+            detail: "Há o app LanguageTool no Mac, mas ele não oferece API local. Use a versão de linha de comando (brew install languagetool) ou LanguageTool Premium na nuvem.".into(),
+        };
+    }
+    DiscoverLtResult {
+        found: false,
+        url: default_url,
+        detail: "LanguageTool não encontrado. Instale com: brew install languagetool".into(),
+    }
+}
+
+fn dirs_home() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(PathBuf::from)
+}
+
+fn which(cmd: &str) -> Option<PathBuf> {
     Command::new("which")
         .arg(cmd)
         .output()

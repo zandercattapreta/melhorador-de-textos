@@ -46,6 +46,15 @@ type ReviewReport = {
   note: string;
 };
 
+type ModelOffer = {
+  id: string;
+  label: string;
+  detail: string;
+  filename: string;
+  url: string;
+  available_locally: boolean;
+};
+
 const LS_LANG = "melhorador.lang";
 const LS_SAVE_DIR = "melhorador.lastSaveDir";
 const LS_VIEW = "melhorador.textView";
@@ -111,6 +120,8 @@ function App() {
   const [cloudUrl, setCloudUrl] = useState("https://api.openai.com/v1");
   const [cloudModel, setCloudModel] = useState("gpt-4o-mini");
   const [cloudKey, setCloudKey] = useState("");
+  const [modelOffers, setModelOffers] = useState<ModelOffer[]>([]);
+  const [showModelUrlDownload, setShowModelUrlDownload] = useState(false);
   const langRef = useRef(lang);
   langRef.current = lang;
   const stopAllRef = useRef(false);
@@ -437,8 +448,43 @@ function App() {
     }
   }
 
+  async function discoverLanguageTool() {
+    try {
+      const found = await invoke<{ found: boolean; url: string; detail: string }>(
+        "discover_languagetool",
+      );
+      setLtUrl(found.url);
+      setInfo(found.detail);
+      setError(null);
+    } catch (e) {
+      setError(errText(e));
+    }
+  }
+
+  async function refreshModelOffers() {
+    try {
+      const offers = await invoke<ModelOffer[]>("list_model_offers");
+      setModelOffers(offers);
+    } catch (e) {
+      setError(errText(e));
+    }
+  }
+
+  async function installModelOffer(offerId: string) {
+    try {
+      await invoke("install_model_offer", { offerId });
+      await refreshModels();
+      await refreshModelOffers();
+      setInfo("Modelo configurado.");
+      setError(null);
+    } catch (e) {
+      setError(errText(e));
+    }
+  }
+
   useEffect(() => {
     void refreshModels();
+    void refreshModelOffers();
     void invoke<{ localUrl?: string; local_url?: string }>("get_lt_settings")
       .then((s) => setLtUrl(s.localUrl || s.local_url || "http://localhost:8081"))
       .catch(() => undefined);
@@ -514,6 +560,16 @@ function App() {
     queue.length > 1 ? `Fila ${queueIndex + 1}/${queue.length}` : null;
   const showConference = !!result && result.page_count > 0;
 
+  function mapReviewEngineLabel(engine: string): string {
+    const value = engine.trim().toLowerCase();
+    if (value.startsWith("languagetool")) return "LanguageTool";
+    if (value.startsWith("cloud")) return "IA na nuvem";
+    if (value === "ia-local-indisponivel" || value === "ia-local-erro") return "IA local";
+    if (value.startsWith("ia-local")) return "IA local";
+    if (value.startsWith("basico")) return "Correções básicas";
+    return "Sugestões";
+  }
+
   const displayText = (() => {
     if (!result) return "";
     if (
@@ -536,470 +592,399 @@ function App() {
         </span>
       </header>
 
-      <section className="toolbar">
-        <div className="actions">
-          <button type="button" onClick={() => void openPdf()} disabled={busy}>
-            Abrir PDF
-          </button>
-          <button type="button" onClick={() => void openFolder()} disabled={busy}>
-            Abrir pasta
-          </button>
-          {busy && (
-            <>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => void requestStop(false)}
-              >
-                Pular
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => void requestStop(true)}
-              >
-                Parar
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => void clearData()}
-            disabled={busy}
-          >
-            Limpar dados
-          </button>
-        </div>
-        <label className="lang">
-          Idioma OCR
-          <select
-            value={lang}
-            disabled={busy}
-            onChange={(e) => setLang(e.target.value as OcrLang)}
-          >
-            <option value="auto">Auto (detectar)</option>
-            <option value="por+eng">Português + inglês</option>
-            <option value="por">Só português</option>
-            <option value="eng">Só inglês</option>
-          </select>
-        </label>
-      </section>
-
-      <section className="rules-panel">
-        <div className="rules-head">
-          <strong>Opções avançadas</strong>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => setShowAdvanced((v) => !v)}
-          >
-            {showAdvanced ? "Ocultar" : "Mostrar"}
-          </button>
-        </div>
-        {showAdvanced && (
-          <>
-            <p className="hint">Regras do livro (antes do próximo processamento)</p>
-            <div className="rules-form">
-              <select
-                value={ruleKind}
-                onChange={(e) => setRuleKind(e.target.value as RuleKind)}
-              >
-                <option value="header">É cabeçalho (remover)</option>
-                <option value="note">É nota</option>
-                <option value="no_join">Não juntar</option>
-              </select>
-              <input
-                type="text"
-                placeholder="Trecho a reconhecer…"
-                value={rulePattern}
-                onChange={(e) => setRulePattern(e.target.value)}
-              />
-              <button type="button" className="secondary" onClick={() => void addRule()}>
-                Adicionar
-              </button>
-            </div>
-            {rules.length > 0 && (
-              <ul className="rules-list">
-                {rules.map((r, i) => (
-                  <li key={`${r.kind}-${r.pattern}-${i}`}>
-                    <span>
-                      {r.kind}: {r.pattern}
-                    </span>
+      <div className="workspace">
+        <section className="col col-setup">
+          <div className="col-title">Setup</div>
+          <div className="col-scroll">
+            <section className="toolbar" style={{ margin: 0 }}>
+              <div className="actions">
+                <button type="button" onClick={() => void openPdf()} disabled={busy}>
+                  Abrir PDF
+                </button>
+                <button type="button" onClick={() => void openFolder()} disabled={busy}>
+                  Abrir pasta
+                </button>
+                {busy && (
+                  <>
                     <button
                       type="button"
                       className="secondary"
-                      onClick={() => void removeRule(i)}
+                      onClick={() => void requestStop(false)}
                     >
-                      Remover
+                      Pular
                     </button>
-                  </li>
-                ))}
-              </ul>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void requestStop(true)}
+                    >
+                      Parar
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void clearData()}
+                  disabled={busy}
+                >
+                  Limpar dados
+                </button>
+              </div>
+              <label className="lang">
+                Idioma OCR
+                <select
+                  value={lang}
+                  disabled={busy}
+                  onChange={(e) => setLang(e.target.value as OcrLang)}
+                >
+                  <option value="auto">Auto (detectar)</option>
+                  <option value="por+eng">Português + inglês</option>
+                  <option value="por">Só português</option>
+                  <option value="eng">Só inglês</option>
+                </select>
+              </label>
+            </section>
+
+            <section
+              className={`dropzone ${dragging ? "dragging" : ""} ${busy ? "busy" : ""}`}
+              style={{ margin: "8px 0", padding: "14px 12px" }}
+            >
+              {busy
+                ? progress
+                  ? `${queueLabel ? queueLabel + " · " : ""}Lendo página ${progress.done} de ${progress.total}…`
+                  : `${queueLabel ? queueLabel + " · " : ""}Processando…`
+                : "Arraste PDF/pasta aqui"}
+              <small>
+                {busy && progress
+                  ? "Pular = este livro · Parar = fila"
+                  : "Ou use Abrir PDF / Abrir pasta"}
+              </small>
+            </section>
+
+            {error && <div className="banner error">{error}</div>}
+            {info && <div className="banner warn">{info}</div>}
+            {savedTo && <div className="banner ok">Salvo em: {savedTo}</div>}
+
+            {busy && partialText && (
+              <section className="result">
+                <div className="stats">
+                  <span>texto bruto parcial — a limpeza acontece ao final</span>
+                </div>
+                <pre className="preview partial">{partialText}</pre>
+              </section>
             )}
 
-            <p className="hint" style={{ marginTop: 12 }}>
-              LanguageTool — URL local e conta Premium (nuvem)
-            </p>
-            <div className="rules-form">
-              <input
-                type="text"
-                value={ltUrl}
-                onChange={(e) => setLtUrl(e.target.value)}
-                placeholder="http://localhost:8081"
-              />
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  void invoke("save_lt_settings", {
-                    settings: { localUrl: ltUrl, premiumEnabled: true },
-                  })
-                    .then(() => setInfo("URL salva"))
-                    .catch((e) => setError(errText(e)))
-                }
-              >
-                Salvar URL
-              </button>
-            </div>
-            <div className="rules-form">
-              <input
-                type="text"
-                placeholder="Premium username"
-                value={ltUser}
-                onChange={(e) => setLtUser(e.target.value)}
-              />
-              <input
-                type="password"
-                placeholder="API key"
-                value={ltKey}
-                onChange={(e) => setLtKey(e.target.value)}
-              />
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  void invoke("save_lt_premium_creds", {
-                    username: ltUser,
-                    apiKey: ltKey,
-                  })
-                    .then(() => {
-                      setLtKey("");
-                      setInfo("Credenciais guardadas no Mac");
-                    })
-                    .catch((e) => setError(errText(e)))
-                }
-              >
-                Guardar no Mac
-              </button>
-            </div>
+            {result && (
+              <div className="review-panel">
+                <div className="rules-head">
+                  <strong>Revisão</strong>
+                  <span className="hint">Só sugere. Você decide o que entra.</span>
+                </div>
+                <div className="actions" style={{ marginBottom: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    disabled={reviewBusy}
+                    onClick={() => void runLtLocal()}
+                  >
+                    {reviewBusy ? "Revisando…" : "Revisar com LanguageTool"}
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={reviewBusy}
+                    onClick={() => void runReview()}
+                  >
+                    Revisar com IA local
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={reviewBusy}
+                    onClick={() => void runCloudAi()}
+                  >
+                    Revisar com IA na nuvem
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={reviewBusy}
+                    onClick={() => void runLtPremium()}
+                  >
+                    LanguageTool Premium
+                  </button>
+                </div>
+                <div className="actions" style={{ flexWrap: "wrap" }}>
+                  <button type="button" onClick={() => void saveAgain("md")}>
+                    Salvar .md
+                  </button>
+                  <button type="button" onClick={() => void saveAgain("txt")}>
+                    Salvar .txt
+                  </button>
+                  <button type="button" onClick={() => void saveAgain("docx")}>
+                    Salvar .docx
+                  </button>
+                </div>
+                {acceptedTrail.length > 0 && (
+                  <p className="hint" style={{ marginTop: 8 }}>
+                    {acceptedTrail.length} correção(ões) aplicadas e ainda não salvas.
+                  </p>
+                )}
+              </div>
+            )}
 
-            <p className="hint" style={{ marginTop: 12 }}>
-              IA local — por padrão usa o Gemma do CoTypist (se estiver no Mac). Você
-              pode escolher outro modelo aberto ou baixar um novo.
-              {gguf?.selected
-                ? ` Em uso: ${gguf.selected}`
-                : " Nenhum modelo encontrado ainda."}
-            </p>
-            {gguf && gguf.catalog.length > 0 && (
-              <ul className="rules-list">
-                {gguf.catalog.map((m) => (
-                  <li key={`${m.source}-${m.name}`}>
-                    <span>
-                      {m.name} ({Math.round(m.bytes / 1e6)} MB)
-                      {m.source === "cotypist" ? " · CoTypist" : " · baixado"}
-                      {gguf.selected === m.name ? " · ativo" : ""}
-                    </span>
-                    <span>
+            <section className="rules-panel" style={{ marginTop: 8 }}>
+              <div className="rules-head">
+                <strong>Opções avançadas</strong>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                >
+                  {showAdvanced ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
+              {showAdvanced && (
+                <>
+                  <p className="hint">Regras do livro (antes do próximo processamento)</p>
+                  <div className="rules-form">
+                    <select
+                      value={ruleKind}
+                      onChange={(e) => setRuleKind(e.target.value as RuleKind)}
+                    >
+                      <option value="header">É cabeçalho (remover)</option>
+                      <option value="note">É nota</option>
+                      <option value="no_join">Não juntar</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Trecho a reconhecer…"
+                      value={rulePattern}
+                      onChange={(e) => setRulePattern(e.target.value)}
+                    />
+                    <button type="button" className="secondary" onClick={() => void addRule()}>
+                      Adicionar
+                    </button>
+                  </div>
+                  {rules.length > 0 && (
+                    <ul className="rules-list">
+                      {rules.map((r, i) => (
+                        <li key={`${r.kind}-${r.pattern}-${i}`}>
+                          <span>
+                            {r.kind}: {r.pattern}
+                          </span>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => void removeRule(i)}
+                          >
+                            Remover
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <p className="hint" style={{ marginTop: 12 }}>
+                    LanguageTool — URL local e conta Premium
+                  </p>
+                  <div className="rules-form">
+                    <input
+                      type="text"
+                      value={ltUrl}
+                      onChange={(e) => setLtUrl(e.target.value)}
+                      placeholder="http://localhost:8081"
+                    />
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void discoverLanguageTool()}
+                    >
+                      Descobrir LanguageTool
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() =>
+                        void invoke("save_lt_settings", {
+                          settings: { localUrl: ltUrl, premiumEnabled: true },
+                        })
+                          .then(() => setInfo("URL salva"))
+                          .catch((e) => setError(errText(e)))
+                      }
+                    >
+                      Salvar URL
+                    </button>
+                  </div>
+                  <div className="rules-form">
+                    <input
+                      type="text"
+                      placeholder="Premium username"
+                      value={ltUser}
+                      onChange={(e) => setLtUser(e.target.value)}
+                    />
+                    <input
+                      type="password"
+                      placeholder="API key"
+                      value={ltKey}
+                      onChange={(e) => setLtKey(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() =>
+                        void invoke("save_lt_premium_creds", {
+                          username: ltUser,
+                          apiKey: ltKey,
+                        })
+                          .then(() => {
+                            setLtKey("");
+                            setInfo("Credenciais guardadas no Mac");
+                          })
+                          .catch((e) => setError(errText(e)))
+                      }
+                    >
+                      Guardar no Mac
+                    </button>
+                  </div>
+
+                  <p className="hint" style={{ marginTop: 12 }}>
+                    IA local — escolhas prontas de modelo.
+                    {gguf?.selected ? ` Em uso: ${gguf.selected}` : ""}
+                  </p>
+                  {modelOffers.length > 0 ? (
+                    <ul className="rules-list">
+                      {modelOffers.map((offer) => (
+                        <li key={offer.id}>
+                          <span>
+                            {offer.label} — {offer.detail}
+                          </span>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => void installModelOffer(offer.id)}
+                          >
+                            {offer.available_locally ? "Usar" : "Baixar"}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="hint">Nenhuma oferta disponível no momento.</p>
+                  )}
+                  <button
+                    type="button"
+                    className="secondary"
+                    style={{ marginTop: 8 }}
+                    onClick={() => setShowModelUrlDownload((v) => !v)}
+                  >
+                    {showModelUrlDownload
+                      ? "Ocultar URL manual de modelo"
+                      : "Mostrar URL manual de modelo"}
+                  </button>
+                  {showModelUrlDownload && (
+                    <div className="rules-form" style={{ marginTop: 8 }}>
+                      <input
+                        type="text"
+                        placeholder="URL do arquivo .gguf"
+                        value={ggufUrl}
+                        onChange={(e) => setGgufUrl(e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        placeholder="nome.gguf"
+                        value={ggufName}
+                        onChange={(e) => setGgufName(e.target.value)}
+                      />
                       <button
                         type="button"
                         className="secondary"
                         onClick={() =>
-                          void invoke("select_gguf_model", { name: m.name })
-                            .then(() => refreshModels())
+                          void invoke("download_gguf_model", {
+                            url: ggufUrl,
+                            filename: ggufName || "model.gguf",
+                            sha256: null,
+                          })
+                            .then(() => {
+                              void refreshModels();
+                              void refreshModelOffers();
+                            })
                             .catch((e) => setError(errText(e)))
                         }
                       >
-                        Usar
+                        Baixar modelo
                       </button>
-                      {m.source !== "cotypist" && (
-                        <>
-                          {" "}
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() =>
-                              void invoke("remove_gguf_model", { name: m.name })
-                                .then(() => refreshModels())
-                                .catch((e) => setError(errText(e)))
-                            }
-                          >
-                            Remover
-                          </button>
-                        </>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="hint">Baixar outro modelo aberto (.gguf) para usar offline:</p>
-            <div className="rules-form">
-              <input
-                type="text"
-                placeholder="URL do arquivo .gguf"
-                value={ggufUrl}
-                onChange={(e) => setGgufUrl(e.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="nome.gguf"
-                value={ggufName}
-                onChange={(e) => setGgufName(e.target.value)}
-              />
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  void invoke("download_gguf_model", {
-                    url: ggufUrl,
-                    filename: ggufName || "model.gguf",
-                    sha256: null,
-                  })
-                    .then(() => refreshModels())
-                    .catch((e) => setError(errText(e)))
-                }
-              >
-                Baixar modelo
-              </button>
-            </div>
-            <p className="hint" style={{ marginTop: 12 }}>
-              IA na nuvem — API no formato OpenAI (URL + modelo + chave). O texto sai
-              do computador.
-            </p>
-            <div className="rules-form">
-              <input
-                type="text"
-                placeholder="URL base (…/v1)"
-                value={cloudUrl}
-                onChange={(e) => setCloudUrl(e.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="modelo"
-                value={cloudModel}
-                onChange={(e) => setCloudModel(e.target.value)}
-              />
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  void invoke("save_cloud_ai_settings", {
-                    settings: {
-                      baseUrl: cloudUrl,
-                      model: cloudModel,
-                      enabled: true,
-                    },
-                  })
-                    .then(() => setInfo("IA nuvem: URL/modelo salvos"))
-                    .catch((e) => setError(errText(e)))
-                }
-              >
-                Salvar URL/modelo
-              </button>
-            </div>
-            <div className="rules-form">
-              <input
-                type="password"
-                placeholder="API key"
-                value={cloudKey}
-                onChange={(e) => setCloudKey(e.target.value)}
-              />
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  void invoke("save_cloud_ai_key", { apiKey: cloudKey })
-                    .then(() => {
-                      setCloudKey("");
-                      setInfo("Chave da IA nuvem guardada no Mac");
-                    })
-                    .catch((e) => setError(errText(e)))
-                }
-              >
-                Guardar chave no Mac
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                disabled={reviewBusy || !result}
-                onClick={() => void runLtPremium()}
-              >
-                LanguageTool Premium (nuvem)
-              </button>
-            </div>
-          </>
-        )}
-      </section>
+                    </div>
+                  )}
 
-      <section
-        className={`dropzone ${dragging ? "dragging" : ""} ${busy ? "busy" : ""}`}
-      >
-        {busy
-          ? progress
-            ? `${queueLabel ? queueLabel + " · " : ""}Lendo página ${progress.done} de ${progress.total}…`
-            : `${queueLabel ? queueLabel + " · " : ""}Processando…`
-          : "Arraste o PDF (ou pasta) aqui — ou use Abrir PDF / Abrir pasta"}
-        <small>
-          {busy && progress
-            ? "Pular = este livro · Parar = encerra a fila"
-            : "Pasta = todos os PDFs da pasta, um após o outro"}
-        </small>
-      </section>
-
-      {error && <div className="banner error">{error}</div>}
-      {info && <div className="banner warn">{info}</div>}
-      {savedTo && <div className="banner ok">Salvo em: {savedTo}</div>}
-
-      {busy && partialText && (
-        <section className="result">
-          <div className="stats">
-            <span>texto bruto parcial — a limpeza acontece ao final</span>
-          </div>
-          <pre className="preview partial">{partialText}</pre>
-        </section>
-      )}
-
-      {result && (
-        <section className="result">
-          <div className="result-head">
-            <h2>
-              {queueLabel ? `${queueLabel} · ` : ""}
-              {result.source_name}
-            </h2>
-            <div className="actions">
-              <button type="button" onClick={() => void saveAgain("md")}>
-                Salvar .md
-              </button>
-              <button type="button" onClick={() => void saveAgain("txt")}>
-                Salvar .txt
-              </button>
-              <button type="button" onClick={() => void saveAgain("docx")}>
-                Salvar .docx
-              </button>
-            </div>
-          </div>
-
-          <div className="review-panel">
-            <div className="rules-head">
-              <strong>Revisão</strong>
-              <span className="hint">Só sugere. Você decide o que entra.</span>
-            </div>
-            <div className="actions" style={{ marginBottom: 8 }}>
-              <button
-                type="button"
-                disabled={reviewBusy}
-                onClick={() => void runLtLocal()}
-              >
-                {reviewBusy ? "Revisando…" : "Revisar com LanguageTool"}
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                disabled={reviewBusy}
-                onClick={() => void runReview()}
-              >
-                Revisar com IA local (opcional)
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                disabled={reviewBusy}
-                onClick={() => void runCloudAi()}
-              >
-                Revisar com IA na nuvem
-              </button>
-            </div>
-            {acceptedTrail.length > 0 && (
-              <p className="hint">
-                {acceptedTrail.length} correção(ões) já aplicadas neste texto (ainda
-                não salvas).
-              </p>
-            )}
-          </div>
-
-          <div className="stats">
-            <span>motor: {result.engine}</span>
-            <span>idioma: {result.languages_used}</span>
-            <span>páginas texto: {result.pages.length || "—"}</span>
-            <span>títulos: {(s.h1 ?? 0) + (s.h2 ?? 0) + (s.h3 ?? 0) + (s.h4 ?? 0)}</span>
-            <span>parágrafos: {s.prose ?? 0}</span>
-            <span>hifenizações unidas: {c.hyphenations_joined ?? 0}</span>
-          </div>
-
-          {result.warnings.length > 0 && (
-            <button
-              type="button"
-              className="banner warn warn-click"
-              onClick={() => focusWarnings()}
-            >
-              {result.warnings.join(" · ")}
-            </button>
-          )}
-
-          {review && (
-            <div className="review-panel">
-              <div className="rules-head">
-                <strong>Sugestões — {review.engine}</strong>
-                <div className="actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() =>
-                      setAccepted(new Set(review.proposals.map((_, i) => i)))
-                    }
-                  >
-                    Marcar todas
-                  </button>
-                  <button type="button" className="secondary" onClick={() => setAccepted(new Set())}>
-                    Desmarcar
-                  </button>
-                  <button type="button" onClick={() => void applyAccepted()}>
-                    Aplicar marcadas
-                  </button>
-                </div>
-              </div>
-              <p className="hint">{review.note}</p>
-              {review.proposals.length === 0 ? (
-                <p className="hint">Nenhuma sugestão.</p>
-              ) : (
-                <ul className="rules-list">
-                  {review.proposals.map((p, i) => (
-                    <li key={i}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={accepted.has(i)}
-                          onChange={(e) => {
-                            const next = new Set(accepted);
-                            if (e.target.checked) next.add(i);
-                            else next.delete(i);
-                            setAccepted(next);
-                          }}
-                        />{" "}
-                        <code>{p.original}</code> → <code>{p.proposed}</code>
-                        <span className="hint"> — {p.reason}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
+                  <p className="hint" style={{ marginTop: 12 }}>
+                    IA na nuvem — API no formato OpenAI (URL + modelo + chave). O texto
+                    sai do computador.
+                  </p>
+                  <div className="rules-form">
+                    <input
+                      type="text"
+                      placeholder="URL base (…/v1)"
+                      value={cloudUrl}
+                      onChange={(e) => setCloudUrl(e.target.value)}
+                    />
+                    <input
+                      type="text"
+                      placeholder="modelo"
+                      value={cloudModel}
+                      onChange={(e) => setCloudModel(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() =>
+                        void invoke("save_cloud_ai_settings", {
+                          settings: {
+                            baseUrl: cloudUrl,
+                            model: cloudModel,
+                            enabled: true,
+                          },
+                        })
+                          .then(() => setInfo("IA nuvem: URL/modelo salvos"))
+                          .catch((e) => setError(errText(e)))
+                      }
+                    >
+                      Salvar URL/modelo
+                    </button>
+                  </div>
+                  <div className="rules-form">
+                    <input
+                      type="password"
+                      placeholder="API key"
+                      value={cloudKey}
+                      onChange={(e) => setCloudKey(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() =>
+                        void invoke("save_cloud_ai_key", { apiKey: cloudKey })
+                          .then(() => {
+                            setCloudKey("");
+                            setInfo("Chave da IA nuvem guardada no Mac");
+                          })
+                          .catch((e) => setError(errText(e)))
+                      }
+                    >
+                      Guardar chave no Mac
+                    </button>
+                  </div>
+                </>
               )}
-            </div>
-          )}
+            </section>
+          </div>
+        </section>
 
-          {showConference ? (
-            <div className="conference">
-              <div className="conference-pane">
+        <section className="col col-pdf">
+          <div className="col-title">PDF</div>
+          <div className="col-scroll">
+            {showConference && result ? (
+              <>
                 <div className="conference-nav">
                   <button
                     type="button"
@@ -1016,25 +1001,63 @@ function App() {
                     type="button"
                     className="secondary"
                     disabled={confPage >= result.page_count || pageBusy}
-                    onClick={() =>
-                      setConfPage((p) => Math.min(result.page_count, p + 1))
-                    }
+                    onClick={() => setConfPage((p) => Math.min(result.page_count, p + 1))}
                   >
                     Próx
                   </button>
                 </div>
                 <div className="page-frame">
                   {pageBusy && !pageImg && <span className="hint">Carregando página…</span>}
-                  {pageImg && (
+                  {pageImg ? (
                     <img
                       src={pageImg}
                       alt={`Página ${confPage} do original`}
                       className="page-raster"
                     />
+                  ) : (
+                    !pageBusy && <span className="hint">Sem imagem da página.</span>
                   )}
                 </div>
+              </>
+            ) : (
+              <div className="page-frame">
+                <span className="hint">Abra um PDF</span>
               </div>
-              <div className="conference-pane">
+            )}
+          </div>
+        </section>
+
+        <section className="col col-text">
+          <div className="col-title">Texto</div>
+          <div className="col-scroll">
+            {result ? (
+              <>
+                <div className="result-head">
+                  <h2>
+                    {queueLabel ? `${queueLabel} · ` : ""}
+                    {result.source_name}
+                  </h2>
+                </div>
+
+                <div className="stats">
+                  <span>motor: {result.engine}</span>
+                  <span>idioma: {result.languages_used}</span>
+                  <span>páginas texto: {result.pages.length || "—"}</span>
+                  <span>títulos: {(s.h1 ?? 0) + (s.h2 ?? 0) + (s.h3 ?? 0) + (s.h4 ?? 0)}</span>
+                  <span>parágrafos: {s.prose ?? 0}</span>
+                  <span>hifenizações unidas: {c.hyphenations_joined ?? 0}</span>
+                </div>
+
+                {result.warnings.length > 0 && (
+                  <button
+                    type="button"
+                    className="banner warn warn-click"
+                    onClick={() => focusWarnings()}
+                  >
+                    {result.warnings.join(" · ")}
+                  </button>
+                )}
+
                 <div className="jump">
                   <span className="hint">Texto:</span>
                   <button
@@ -1058,32 +1081,73 @@ function App() {
                     Fim
                   </button>
                 </div>
+
                 <pre ref={previewRef} tabIndex={0} className="preview full conference-text">
                   {displayText}
                 </pre>
+
+                {review && (
+                  <div className="review-panel">
+                    <div className="rules-head">
+                      <strong>Sugestões — {mapReviewEngineLabel(review.engine)}</strong>
+                      <div className="actions">
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() =>
+                            setAccepted(new Set(review.proposals.map((_, i) => i)))
+                          }
+                        >
+                          Marcar todas
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => setAccepted(new Set())}
+                        >
+                          Desmarcar
+                        </button>
+                        <button type="button" onClick={() => void applyAccepted()}>
+                          Aplicar marcadas
+                        </button>
+                      </div>
+                    </div>
+                    <p className="hint">{review.note}</p>
+                    {review.proposals.length === 0 ? (
+                      <p className="hint">Nenhuma sugestão.</p>
+                    ) : (
+                      <ul className="rules-list">
+                        {review.proposals.map((p, i) => (
+                          <li key={i}>
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={accepted.has(i)}
+                                onChange={(e) => {
+                                  const next = new Set(accepted);
+                                  if (e.target.checked) next.add(i);
+                                  else next.delete(i);
+                                  setAccepted(next);
+                                }}
+                              />{" "}
+                              <code>{p.original}</code> → <code>{p.proposed}</code>
+                              <span className="hint"> — {p.reason}</span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="page-frame">
+                <span className="hint">Abra um PDF</span>
               </div>
-            </div>
-          ) : (
-            <>
-              <div className="jump">
-                <span className="hint">Ir para:</span>
-                <button type="button" onClick={() => jumpTo(0)}>
-                  Início
-                </button>
-                <button type="button" onClick={() => jumpTo(0.5)}>
-                  Meio
-                </button>
-                <button type="button" onClick={() => jumpTo(1)}>
-                  Fim
-                </button>
-              </div>
-              <pre ref={previewRef} className="preview full">
-                {result.cleaned}
-              </pre>
-            </>
-          )}
+            )}
+          </div>
         </section>
-      )}
+      </div>
     </main>
   );
 }
