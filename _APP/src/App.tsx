@@ -96,13 +96,15 @@ function App() {
   const [rulePattern, setRulePattern] = useState("");
   const [review, setReview] = useState<ReviewReport | null>(null);
   const [accepted, setAccepted] = useState<Set<number>>(new Set());
+  const [acceptedTrail, setAcceptedTrail] = useState<DiffProposal[]>([]);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [gguf, setGguf] = useState<{
     selected: string | null;
     catalog: { name: string; bytes: number }[];
   } | null>(null);
   const [ggufUrl, setGgufUrl] = useState("");
   const [ggufName, setGgufName] = useState("");
-  const [ggufSha, setGgufSha] = useState("");
   const [ltUrl, setLtUrl] = useState("http://localhost:8081");
   const [ltUser, setLtUser] = useState("");
   const [ltKey, setLtKey] = useState("");
@@ -155,6 +157,7 @@ function App() {
     setPageImg(null);
     setReview(null);
     setAccepted(new Set());
+    setAcceptedTrail([]);
   }, [result?.source_path]);
 
   useEffect(() => {
@@ -193,7 +196,7 @@ function App() {
         engine: r.engine,
         languages: r.languages_used,
         pageCount: r.page_count,
-        acceptedDiffs: [],
+        acceptedDiffs: acceptedTrail,
       });
       setSavedTo(dest);
     } catch (e) {
@@ -348,42 +351,59 @@ function App() {
 
   async function runReview() {
     if (!result) return;
+    setReviewBusy(true);
+    setError(null);
     try {
       const report = await invoke<ReviewReport>("propose_review", {
         text: result.cleaned,
       });
       setReview(report);
-      setAccepted(new Set());
+      setAccepted(new Set(report.proposals.map((_, i) => i)));
       setInfo(report.note);
     } catch (e) {
       setError(errText(e));
+    } finally {
+      setReviewBusy(false);
     }
   }
 
   async function runLtLocal() {
     if (!result) return;
+    setReviewBusy(true);
+    setError(null);
+    setInfo("Consultando LanguageTool…");
     try {
+      await invoke<string>("ensure_lt_server");
       const proposals = await invoke<DiffProposal[]>("check_lt_local", {
         text: result.cleaned,
       });
       setReview({
         proposals,
         vocabulary: [],
-        engine: "languagetool-local",
-        note: "LanguageTool local — nada enviado à nuvem. Aceite o que quiser.",
+        engine: "LanguageTool",
+        note:
+          proposals.length === 0
+            ? "LanguageTool não apontou correções neste texto."
+            : `${proposals.length} sugestão(ões). Marque as que quiser e clique Aplicar.`,
       });
-      setAccepted(new Set());
+      setAccepted(new Set(proposals.map((_, i) => i)));
+      setInfo(null);
     } catch (e) {
       setError(errText(e));
+      setInfo(null);
+    } finally {
+      setReviewBusy(false);
     }
   }
 
   async function runLtPremium() {
     if (!result) return;
     const ok = window.confirm(
-      "LanguageTool Premium envia o texto para a NUVEM. Continuar?",
+      "LanguageTool Premium envia o texto para a internet (nuvem). Continuar?",
     );
     if (!ok) return;
+    setReviewBusy(true);
+    setError(null);
     try {
       const proposals = await invoke<DiffProposal[]>("check_lt_premium", {
         text: result.cleaned,
@@ -391,12 +411,14 @@ function App() {
       setReview({
         proposals,
         vocabulary: [],
-        engine: "languagetool-premium",
-        note: "Premium (nuvem). Revise cada proposta antes de aceitar.",
+        engine: "LanguageTool Premium (nuvem)",
+        note: `${proposals.length} sugestão(ões) da nuvem. Revise antes de aplicar.`,
       });
       setAccepted(new Set());
     } catch (e) {
       setError(errText(e));
+    } finally {
+      setReviewBusy(false);
     }
   }
 
@@ -423,7 +445,7 @@ function App() {
     if (!result || !review) return;
     const list = review.proposals.filter((_, i) => accepted.has(i));
     if (list.length === 0) {
-      setInfo("Nenhuma proposta aceita.");
+      setInfo("Nenhuma sugestão marcada.");
       return;
     }
     try {
@@ -432,9 +454,12 @@ function App() {
         accepted: list,
       });
       setResult({ ...result, cleaned: next, pages: [] });
+      setAcceptedTrail((prev) => [...prev, ...list]);
       setReview(null);
       setAccepted(new Set());
-      setInfo("Diffs aceitos aplicados ao texto (ainda não gravados em disco).");
+      setInfo(
+        `${list.length} correção(ões) aplicadas. Ainda não gravadas — use Salvar.`,
+      );
       setTextView("book");
     } catch (e) {
       setError(errText(e));
@@ -532,187 +557,170 @@ function App() {
 
       <section className="rules-panel">
         <div className="rules-head">
-          <strong>Regras (R4)</strong>
-          <span className="hint">Antes do próximo processamento</span>
-        </div>
-        <div className="rules-form">
-          <select
-            value={ruleKind}
-            onChange={(e) => setRuleKind(e.target.value as RuleKind)}
+          <strong>Opções avançadas</strong>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => setShowAdvanced((v) => !v)}
           >
-            <option value="header">É cabeçalho (remover)</option>
-            <option value="note">É nota</option>
-            <option value="no_join">Não juntar</option>
-          </select>
-          <input
-            type="text"
-            placeholder="Trecho a reconhecer…"
-            value={rulePattern}
-            onChange={(e) => setRulePattern(e.target.value)}
-          />
-          <button type="button" className="secondary" onClick={() => void addRule()}>
-            Adicionar
+            {showAdvanced ? "Ocultar" : "Mostrar"}
           </button>
         </div>
-        {rules.length > 0 && (
-          <ul className="rules-list">
-            {rules.map((r, i) => (
-              <li key={`${r.kind}-${r.pattern}-${i}`}>
-                <span>
-                  {r.kind}: {r.pattern}
-                </span>
-                <button type="button" className="secondary" onClick={() => void removeRule(i)}>
-                  Remover
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        {showAdvanced && (
+          <>
+            <p className="hint">Regras do livro (antes do próximo processamento)</p>
+            <div className="rules-form">
+              <select
+                value={ruleKind}
+                onChange={(e) => setRuleKind(e.target.value as RuleKind)}
+              >
+                <option value="header">É cabeçalho (remover)</option>
+                <option value="note">É nota</option>
+                <option value="no_join">Não juntar</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Trecho a reconhecer…"
+                value={rulePattern}
+                onChange={(e) => setRulePattern(e.target.value)}
+              />
+              <button type="button" className="secondary" onClick={() => void addRule()}>
+                Adicionar
+              </button>
+            </div>
+            {rules.length > 0 && (
+              <ul className="rules-list">
+                {rules.map((r, i) => (
+                  <li key={`${r.kind}-${r.pattern}-${i}`}>
+                    <span>
+                      {r.kind}: {r.pattern}
+                    </span>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void removeRule(i)}
+                    >
+                      Remover
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
 
-      <section className="rules-panel">
-        <div className="rules-head">
-          <strong>Modelo GGUF (R5)</strong>
-          <button type="button" className="secondary" onClick={() => void refreshModels()}>
-            Atualizar
-          </button>
-        </div>
-        <p className="hint">
-          Requer `llama-cli` no PATH. Sem modelo = só heurística.
-          {gguf?.selected ? ` Selecionado: ${gguf.selected}` : " Nenhum selecionado."}
-        </p>
-        <div className="rules-form">
-          <input
-            type="text"
-            placeholder="URL do .gguf"
-            value={ggufUrl}
-            onChange={(e) => setGgufUrl(e.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="nome.gguf"
-            value={ggufName}
-            onChange={(e) => setGgufName(e.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="SHA256 (opcional)"
-            value={ggufSha}
-            onChange={(e) => setGgufSha(e.target.value)}
-          />
-          <button
-            type="button"
-            className="secondary"
-            onClick={() =>
-              void invoke("download_gguf_model", {
-                url: ggufUrl,
-                filename: ggufName || "model.gguf",
-                sha256: ggufSha || null,
-              })
-                .then(() => refreshModels())
-                .catch((e) => setError(errText(e)))
-            }
-          >
-            Baixar
-          </button>
-        </div>
-        {gguf && gguf.catalog.length > 0 && (
-          <ul className="rules-list">
-            {gguf.catalog.map((m) => (
-              <li key={m.name}>
-                <span>
-                  {m.name} ({Math.round(m.bytes / 1e6)} MB)
-                </span>
-                <span>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() =>
-                      void invoke("select_gguf_model", { name: m.name })
-                        .then(() => refreshModels())
-                        .catch((e) => setError(errText(e)))
-                    }
-                  >
-                    Usar
-                  </button>{" "}
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() =>
-                      void invoke("remove_gguf_model", { name: m.name })
-                        .then(() => refreshModels())
-                        .catch((e) => setError(errText(e)))
-                    }
-                  >
-                    Remover
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+            <p className="hint" style={{ marginTop: 12 }}>
+              LanguageTool — URL local e conta Premium (nuvem)
+            </p>
+            <div className="rules-form">
+              <input
+                type="text"
+                value={ltUrl}
+                onChange={(e) => setLtUrl(e.target.value)}
+                placeholder="http://localhost:8081"
+              />
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  void invoke("save_lt_settings", {
+                    settings: { localUrl: ltUrl, premiumEnabled: true },
+                  })
+                    .then(() => setInfo("URL salva"))
+                    .catch((e) => setError(errText(e)))
+                }
+              >
+                Salvar URL
+              </button>
+            </div>
+            <div className="rules-form">
+              <input
+                type="text"
+                placeholder="Premium username"
+                value={ltUser}
+                onChange={(e) => setLtUser(e.target.value)}
+              />
+              <input
+                type="password"
+                placeholder="API key"
+                value={ltKey}
+                onChange={(e) => setLtKey(e.target.value)}
+              />
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  void invoke("save_lt_premium_creds", {
+                    username: ltUser,
+                    apiKey: ltKey,
+                  })
+                    .then(() => {
+                      setLtKey("");
+                      setInfo("Credenciais guardadas no Mac");
+                    })
+                    .catch((e) => setError(errText(e)))
+                }
+              >
+                Guardar no Mac
+              </button>
+            </div>
 
-      <section className="rules-panel">
-        <div className="rules-head">
-          <strong>LanguageTool</strong>
-          <span className="hint">Local = máquina · Premium = nuvem</span>
-        </div>
-        <div className="rules-form">
-          <input
-            type="text"
-            value={ltUrl}
-            onChange={(e) => setLtUrl(e.target.value)}
-            placeholder="http://localhost:8081"
-          />
-          <button
-            type="button"
-            className="secondary"
-            onClick={() =>
-              void invoke("save_lt_settings", {
-                settings: { localUrl: ltUrl, premiumEnabled: true },
-              })
-                .then(() => setInfo("URL LT salva"))
-                .catch((e) => setError(errText(e)))
-            }
-          >
-            Salvar URL
-          </button>
-        </div>
-        <div className="rules-form">
-          <input
-            type="text"
-            placeholder="Premium username"
-            value={ltUser}
-            onChange={(e) => setLtUser(e.target.value)}
-          />
-          <input
-            type="password"
-            placeholder="API key"
-            value={ltKey}
-            onChange={(e) => setLtKey(e.target.value)}
-          />
-          <button
-            type="button"
-            className="secondary"
-            onClick={() =>
-              void invoke("save_lt_premium_creds", {
-                username: ltUser,
-                apiKey: ltKey,
-              })
-                .then(() => {
-                  setLtKey("");
-                  setInfo("Credenciais no keychain");
-                })
-                .catch((e) => setError(errText(e)))
-            }
-          >
-            Guardar keychain
-          </button>
-          <button type="button" className="secondary" onClick={() => void runLtPremium()}>
-            LT Premium (nuvem)
-          </button>
-        </div>
+            <p className="hint" style={{ marginTop: 12 }}>
+              IA local — modelo GGUF (opcional). Precisa do programa llama-cli no
+              computador.
+              {gguf?.selected ? ` Modelo: ${gguf.selected}` : " Nenhum modelo ainda."}
+            </p>
+            <div className="rules-form">
+              <input
+                type="text"
+                placeholder="URL do arquivo .gguf"
+                value={ggufUrl}
+                onChange={(e) => setGgufUrl(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="nome.gguf"
+                value={ggufName}
+                onChange={(e) => setGgufName(e.target.value)}
+              />
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  void invoke("download_gguf_model", {
+                    url: ggufUrl,
+                    filename: ggufName || "model.gguf",
+                    sha256: null,
+                  })
+                    .then(() => refreshModels())
+                    .catch((e) => setError(errText(e)))
+                }
+              >
+                Baixar modelo
+              </button>
+            </div>
+            {gguf && gguf.catalog.length > 0 && (
+              <ul className="rules-list">
+                {gguf.catalog.map((m) => (
+                  <li key={m.name}>
+                    <span>
+                      {m.name} ({Math.round(m.bytes / 1e6)} MB)
+                    </span>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() =>
+                        void invoke("select_gguf_model", { name: m.name })
+                          .then(() => refreshModels())
+                          .catch((e) => setError(errText(e)))
+                      }
+                    >
+                      Usar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
       </section>
 
       <section
@@ -760,13 +768,45 @@ function App() {
               <button type="button" onClick={() => void saveAgain("docx")}>
                 Salvar .docx
               </button>
-              <button type="button" className="secondary" onClick={() => void runReview()}>
-                Revisar (opt-in)
+            </div>
+          </div>
+
+          <div className="review-panel">
+            <div className="rules-head">
+              <strong>Revisão</strong>
+              <span className="hint">Só sugere. Você decide o que entra.</span>
+            </div>
+            <div className="actions" style={{ marginBottom: 8 }}>
+              <button
+                type="button"
+                disabled={reviewBusy}
+                onClick={() => void runLtLocal()}
+              >
+                {reviewBusy ? "Revisando…" : "Revisar com LanguageTool"}
               </button>
-              <button type="button" className="secondary" onClick={() => void runLtLocal()}>
-                LT local
+              <button
+                type="button"
+                className="secondary"
+                disabled={reviewBusy}
+                onClick={() => void runReview()}
+              >
+                Revisar com IA local (opcional)
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={reviewBusy}
+                onClick={() => void runLtPremium()}
+              >
+                LanguageTool Premium (nuvem)
               </button>
             </div>
+            {acceptedTrail.length > 0 && (
+              <p className="hint">
+                {acceptedTrail.length} correção(ões) já aplicadas neste texto (ainda
+                não salvas).
+              </p>
+            )}
           </div>
 
           <div className="stats">
@@ -791,14 +831,28 @@ function App() {
           {review && (
             <div className="review-panel">
               <div className="rules-head">
-                <strong>Revisão ({review.engine})</strong>
-                <button type="button" onClick={() => void applyAccepted()}>
-                  Aplicar aceitas
-                </button>
+                <strong>Sugestões — {review.engine}</strong>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() =>
+                      setAccepted(new Set(review.proposals.map((_, i) => i)))
+                    }
+                  >
+                    Marcar todas
+                  </button>
+                  <button type="button" className="secondary" onClick={() => setAccepted(new Set())}>
+                    Desmarcar
+                  </button>
+                  <button type="button" onClick={() => void applyAccepted()}>
+                    Aplicar marcadas
+                  </button>
+                </div>
               </div>
               <p className="hint">{review.note}</p>
               {review.proposals.length === 0 ? (
-                <p className="hint">Nenhuma proposta heurística.</p>
+                <p className="hint">Nenhuma sugestão.</p>
               ) : (
                 <ul className="rules-list">
                   {review.proposals.map((p, i) => (
@@ -814,16 +868,12 @@ function App() {
                             setAccepted(next);
                           }}
                         />{" "}
-                        <code>{p.original}</code> → <code>{p.proposed}</code> ({p.reason})
+                        <code>{p.original}</code> → <code>{p.proposed}</code>
+                        <span className="hint"> — {p.reason}</span>
                       </label>
                     </li>
                   ))}
                 </ul>
-              )}
-              {review.vocabulary.length > 0 && (
-                <p className="hint">
-                  Vocabulário (amostra): {review.vocabulary.slice(0, 12).join(", ")}
-                </p>
               )}
             </div>
           )}

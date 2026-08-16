@@ -150,7 +150,17 @@ fn save_lt_settings(app: AppHandle, settings: lt::LtSettings) -> Result<(), Stri
 }
 
 #[tauri::command]
-fn check_lt_local(app: AppHandle, text: String) -> Result<Vec<melhorador_core::review::DiffProposal>, String> {
+fn ensure_lt_server(app: AppHandle) -> Result<String, String> {
+    let url = load_lt_settings(&app).local_url;
+    lt::ensure_server(&url)?;
+    Ok(format!("LanguageTool pronto em {url}"))
+}
+
+#[tauri::command]
+fn check_lt_local(
+    app: AppHandle,
+    text: String,
+) -> Result<Vec<melhorador_core::review::DiffProposal>, String> {
     let url = load_lt_settings(&app).local_url;
     lt::check_local(&text, &url)
 }
@@ -552,6 +562,7 @@ pub fn run() {
             apply_review_diffs,
             get_lt_settings,
             save_lt_settings,
+            ensure_lt_server,
             check_lt_local,
             check_lt_premium,
             save_lt_premium_creds,

@@ -47,23 +47,77 @@ struct LtResponse {
     matches: Option<Vec<LtMatch>>,
 }
 
+pub fn server_is_up(server_url: &str) -> bool {
+    let url = format!("{}/v2/languages", server_url.trim_end_matches('/'));
+    ureq::get(&url).timeout(std::time::Duration::from_secs(3)).call().is_ok()
+}
+
+/// Sobe `languagetool-server` se instalado e a URL estiver caída (como o CLI).
+pub fn ensure_server(server_url: &str) -> Result<(), String> {
+    if server_is_up(server_url) {
+        return Ok(());
+    }
+    let binary = which("languagetool-server").ok_or_else(|| {
+        "LanguageTool local não encontrado. No Mac: brew install languagetool && brew services start languagetool".to_string()
+    })?;
+    let port = url_port(server_url).unwrap_or(8081);
+    Command::new(binary)
+        .args(["--port", &port.to_string(), "--allow-origin"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Não subi o LanguageTool: {e}"))?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+    while std::time::Instant::now() < deadline {
+        if server_is_up(server_url) {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(800));
+    }
+    Err(format!(
+        "LanguageTool não respondeu a tempo (porta {port}). Verifique: brew services start languagetool"
+    ))
+}
+
+fn which(cmd: &str) -> Option<std::path::PathBuf> {
+    Command::new("which")
+        .arg(cmd)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() {
+                None
+            } else {
+                Some(std::path::PathBuf::from(s))
+            }
+        })
+}
+
+fn url_port(url: &str) -> Option<u16> {
+    let after = url.split("://").nth(1)?;
+    let hostport = after.split('/').next()?;
+    hostport.split(':').nth(1)?.parse().ok()
+}
+
 pub fn check_local(text: &str, server_url: &str) -> Result<Vec<DiffProposal>, String> {
-    // Chunk ~20k como o CLI.
+    ensure_server(server_url)?;
+    // Chunk ~20k como o CLI (limites de char, não byte).
     let chunk_size = 20_000usize;
     let mut proposals = Vec::new();
-    let mut search = 0usize;
-    let mut pos = 0usize;
-    while pos < text.len() {
-        let end = (pos + chunk_size).min(text.len());
-        let chunk = &text[pos..end];
-        let base = text.find(chunk).filter(|&i| i >= search).unwrap_or(pos);
-        search = base + chunk.len();
-        let matches = post_check(chunk, server_url, None)?;
+    let chars: Vec<char> = text.chars().collect();
+    let mut char_pos = 0usize;
+    let mut byte_base = 0usize;
+    while char_pos < chars.len() {
+        let end = (char_pos + chunk_size).min(chars.len());
+        let chunk: String = chars[char_pos..end].iter().collect();
+        let matches = post_check(&chunk, server_url, None)?;
         for m in matches {
             let Some(reps) = m.replacements.as_ref().filter(|r| !r.is_empty()) else {
                 continue;
             };
-            let start = base + m.offset;
+            let start = byte_base + m.offset;
             if start + m.length > text.len() {
                 continue;
             }
@@ -72,20 +126,22 @@ pub fn check_local(text: &str, server_url: &str) -> Result<Vec<DiffProposal>, St
             if original == proposed {
                 continue;
             }
-            if proposed.chars().count() > original.chars().count() + 8 {
+            // Correção OCR pode alongar um pouco; LT costuma ser curto.
+            if proposed.chars().count() > original.chars().count() + 24 {
                 continue;
             }
             proposals.push(DiffProposal {
                 original,
                 proposed,
-                reason: m.message.unwrap_or_else(|| "LanguageTool local".into()),
+                reason: m.message.unwrap_or_else(|| "LanguageTool".into()),
                 byte_offset: start,
             });
-            if proposals.len() >= 40 {
+            if proposals.len() >= 200 {
                 return Ok(proposals);
             }
         }
-        pos = end;
+        byte_base += chunk.len();
+        char_pos = end;
     }
     Ok(proposals)
 }

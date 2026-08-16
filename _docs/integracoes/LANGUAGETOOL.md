@@ -8,7 +8,17 @@ atualizado_em: 2026-08-15
 
 Revisão **híbrida** (15/Ago): camada automática no LT **local** + passada final **humana** no editor Premium. Zero-IA (regras determinísticas; respeita princípio do projeto).
 
-## Camada automática — LT local (open-source)
+## App desktop (`_APP/`)
+
+Fluxo na janela (após processar o PDF):
+
+1. **Revisar com LanguageTool** — sobe o servidor local se preciso (`brew install languagetool`), sugere correções, você marca e **Aplicar marcadas**.
+2. **Revisar com IA local (opcional)** — mesma função se houver modelo GGUF + `llama-cli`.
+3. **LanguageTool Premium (nuvem)** — aviso explícito; texto sai da máquina.
+4. **Salvar** — grava o texto e `*.report.json` com as correções aceitas.
+
+Nada entra no texto sem o humano aceitar.
+
 
 Servidor Java local (`brew install languagetool`, `localhost:8081`); o texto **não sai da máquina**. O batch (ou `check-lt --input cleaned.md`) submete cada livro e grava em `languagetool/`:
 
