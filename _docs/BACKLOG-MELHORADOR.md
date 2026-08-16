@@ -44,8 +44,8 @@ Fila de construção do **app** = **R1 → R5**. CLI = referência estável (ver
 ### Export e distribuição
 - [x] `.docx` com estilos (A9)
 - [x] Tessdata no bundle (script `bundle-tessdata.sh` + resource_dir; treinado local-only)
-- [x] Scripts assinatura/notarização macOS (`notarize-macos.sh`) — **execução** exige Apple ID do Zander
-- [ ] Builds Linux/Windows + auto-update (E6) — requer CI/loja; fora desta máquina
+- [x] Scripts assinatura/notarização macOS (`notarize-macos.sh`) — **fora:** Zander não terá Apple Developer pago; distribuição = GitHub Releases + “clique direito → Abrir”
+- [ ] Builds Linux/Windows + auto-update (E6) — GitHub Releases (sem notarização Apple)
 
 ### Ops
 - [x] Commitar working tree (`feature/backlog-r1-r5-close`)
