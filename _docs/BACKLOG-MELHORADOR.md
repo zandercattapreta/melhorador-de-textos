@@ -48,7 +48,7 @@ Fila de construção do **app** = **R1 → R5**. CLI = referência estável (ver
 - [ ] Builds Linux/Windows + auto-update (E6) — requer CI/loja; fora desta máquina
 
 ### Ops
-- [ ] Commitar working tree (autorizado neste ciclo — fazer após verde)
+- [x] Commitar working tree (`feature/backlog-r1-r5-close`)
 - [x] Versionar `_docs/` (removido do `.gitignore`)
 - [x] Port `metadata` (ficha → slug) no core Rust
 - [x] `report.json` no app (ao salvar)
