@@ -1,37 +1,41 @@
 # Melhorador de Textos
 
-**CLI escalável** que processa N PDFs de livros digitalizados, extrai e limpa texto (formatação/legibilidade), sem IA/LLM — apenas OCR clássico + heurísticas + revisão humana.
+Ferramenta local: extrai e limpa texto de PDFs de livros digitalizados, **sem inventar conteúdo**. OCR clássico + regras + revisão humana. Sem LLM no pipeline.
+
+- **App** ([`_APP/`](_APP/)): janela Tauri — soltar o PDF, acompanhar página a página, salvar `.melhorado.md`
+- **CLI** ([`_CLI/`](_CLI/)): referência de qualidade + lote no Mac de desenvolvimento
+
+PRD: [`_docs/PRD-MELHORADOR.md`](_docs/PRD-MELHORADOR.md).
 
 ## Estado
 
-**PoC 0.2.0** funcional:
-- ✅ Batch-extract: descoberta automática + processamento sequencial de N PDFs
-- ✅ Metadados: extração de autor/título/ISBN com confiança (0.55–0.95)
-- ✅ Pipeline: extração (nativa/OCR) → limpeza → estrutura Markdown → LanguageTool
-- ✅ Testes: 61 tests (pipeline + metadata), 100% sucesso
-- ✅ Validação: 4 PDFs reais (3.5K páginas), BATCH_REPORT.json
+**PoC 0.2.0** (16/Ago):
+- ✅ App: PDF → OCR/nativo → Markdown; exporta `.md`/`.txt`
+- ✅ CLI: batch-extract + metadados + LanguageTool local
+- ✅ Testes: 61 pytest + 33 cargo (`--release`); goldens dos 4 livros
+- ✅ Lote CLI: 4 PDFs reais (3,5 mil páginas)
 
-**Zero-IA:** Tesseract clássico + regras determinísticas + LT Manual Premium (sem API automática).
+**Zero-IA no pipeline.** Revisão LanguageTool só no CLI hoje.
 
 ## Stack
 
-- Python 3.12 (`.venv`)
-- [OCRmyPDF](https://github.com/ocrmypdf/OCRmyPDF) + Tesseract (`por+eng`), Ghostscript, qpdf, unpaper
-- `pypdf` (recorte + texto nativo), `ftfy` (conserto de Unicode)
-- `pytest`
+- App: Rust 1.97 · Tauri 2 · React 19 · PDFium + Tesseract (`por+eng`)
+- CLI: Python 3.12 (`_CLI/.venv`) · OCRmyPDF · pypdf · ftfy · pytest
 
 ## Instalação & Pipeline Completo
 
+> **Estrutura (15/Ago):** código do CLI em [`_CLI/`](_CLI/) · app desktop (Tauri 2 + core Rust) em [`_APP/`](_APP/) · dados na raiz (`_originais/`, `_output/`).
+
 **Opção 1: Script automático (recomendado)**
 ```bash
-bash melhorar.sh
+bash _CLI/melhorar.sh
 ```
 Faz tudo: setup deps → batch-extract → check-lt com LanguageTool local.
 
 **Opção 2: Manual**
 ```bash
 # Só setup (deps + venv + LanguageTool)
-bash setup.sh
+bash _CLI/setup.sh
 ```
 
 **Opção 3: Comandos individuais**
@@ -39,10 +43,12 @@ bash setup.sh
 # dependências nativas (macOS / Homebrew)
 brew install python@3.12 tesseract tesseract-lang ghostscript qpdf unpaper languagetool
 
-# ambiente Python
+# ambiente Python (em _CLI/)
+cd _CLI
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+cd ..   # comandos do CLI rodam da raiz (dados em _originais/ e _output/)
 
 # iniciar LanguageTool local (porta 8081)
 languagetool --http --port 8081 &
@@ -53,7 +59,7 @@ languagetool --http --port 8081 &
 ### Pipeline Completo (recomendado)
 
 ```bash
-bash melhorar.sh
+bash _CLI/melhorar.sh
 ```
 
 **O que faz:**
@@ -64,7 +70,7 @@ bash melhorar.sh
 
 **Exemplo:**
 ```bash
-$ bash melhorar.sh
+$ bash _CLI/melhorar.sh
 [INFO] Verificando deps nativas...
 [✓] Todas as deps nativas OK
 ...
@@ -76,7 +82,7 @@ $ bash melhorar.sh
 ### Batch Extract (manual)
 
 ```bash
-source .venv/bin/activate
+source _CLI/.venv/bin/activate
 
 melhorador-textos batch-extract \
   --input-dir _originais \
@@ -114,8 +120,8 @@ A assinatura Premium do app/extensão não inclui, por padrão, credenciais da P
 ## Testes
 
 ```bash
-source .venv/bin/activate
-python -m pytest
+cd _CLI && source .venv/bin/activate && python -m pytest   # CLI Python (61)
+cd _APP/core && cargo test                                  # core Rust (port)
 ```
 
 ## Saídas (local-only, fora do git)
@@ -143,7 +149,7 @@ _output/<doc>/pages-XXX-YYY/
 | Arquivo | Conteúdo |
 |---|---|
 | `INDEX.md` | Mapa do projeto |
-| `PRD.md` | Princípios (fidelidade, zero-IA, auditável) |
+| `PRD-MELHORADOR.md` | PRD único (App + CLI) |
 | `arquitetura/AS_IS.md` | Estado real (61 testes, 4 PDFs validados, metadados) |
 | `BACKLOG.md` | P0–P2 (docs versionadas, remoto, API LanguageTool) |
 | `integracoes/LANGUAGETOOL.md` | Fluxo manual + batch + chunking automático |

@@ -1,0 +1,173 @@
+/* ==============================================================================
+ * SCRIPT: App.css (melhorador-app)
+ * DESCRIÇÃO: Estilos da tela inicial — usa APENAS tokens do DS (tokens.css)
+ * CHAMADO POR: App.tsx
+ * CONTRATO (RESPOSTA ESPERADA): nenhuma cor/tamanho literal fora dos tokens
+ * ============================================================================== */
+
+.shell {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 16px 24px 48px;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-size: var(--fs-section);
+  line-height: var(--lh-section);
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.dropzone {
+  margin: 24px 0 12px;
+  padding: 32px 24px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color var(--motion-base), background var(--motion-base);
+}
+
+.dropzone.dragging {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.dropzone.busy {
+  color: var(--text-2);
+}
+
+.dropzone small {
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+}
+
+.banner {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  font-size: var(--fs-ui);
+}
+
+.banner.error {
+  background: var(--diff-del);
+  color: var(--err);
+}
+
+.banner.ok {
+  background: var(--diff-add);
+  color: var(--ok);
+}
+
+.banner.warn {
+  background: var(--surface-2);
+  color: var(--warn);
+}
+
+.result {
+  margin-top: 16px;
+}
+
+.result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.result-head h2 {
+  font-size: var(--fs-section);
+  line-height: var(--lh-section);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.actions button {
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+
+.actions button:hover {
+  filter: brightness(1.08);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 12px 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+}
+
+.jump {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.jump button {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.preview.full {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.preview.partial {
+  max-height: 320px;
+  overflow-y: auto;
+  color: var(--text-2);
+}
+
+.preview {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  font-family: var(--font-book);
+  font-size: var(--fs-book);
+  line-height: var(--lh-book);
+  max-width: var(--measure-book);
+  white-space: pre-wrap;
+  overflow-x: auto;
+}

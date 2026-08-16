@@ -2,26 +2,29 @@
 
 ## Overview
 
-Extrai texto de PDFs de livros digitalizados e melhora a conversão: corrige formatação e legibilidade sem inventar conteúdo do livro.
-Stack: Python 3.12 + OCRmyPDF/Tesseract (`por+eng`) + pypdf + ftfy. Deploy: local (CLI). PoC **0.1.0**.
+Extrai texto de PDFs de livros digitalizados e melhora a conversão: formatação e legibilidade **sem inventar conteúdo**.
+Duas superfícies: **App desktop** (`_APP/`, Tauri 2 + core Rust) e **CLI** (`_CLI/`, Python 3.12 — referência + lote). PoC **0.2.0**.
 
-Documentação: [`_docs/INDEX.md`](_docs/INDEX.md). Estado: [`_docs/arquitetura/AS_IS.md`](_docs/arquitetura/AS_IS.md).
+PRD único: [`_docs/PRD-MELHORADOR.md`](_docs/PRD-MELHORADOR.md). Índice: [`_docs/INDEX.md`](_docs/INDEX.md). Estado: [`_docs/arquitetura/AS_IS.md`](_docs/arquitetura/AS_IS.md).
 
 > `.gitignore` ignora `_docs/` — documentação hoje só no disco/tarball.
 
 ## Setup / Build / Test
 
+**Estrutura:** `_CLI/` (Python, testes, venv) · `_APP/` (Tauri 2: `core/` Rust + UI React/TS) · `_docs/` · `_originais/` · `_output/` (dados, raiz).
+
 ```bash
-brew install python@3.12 tesseract tesseract-lang ghostscript qpdf unpaper  # deps nativas
-python3.12 -m venv .venv && source .venv/bin/activate                       # ambiente
-pip install -e ".[dev]"                                                      # instala projeto
-python -m pytest                                                            # testes
-melhorador-textos extract --input "_ originais/<arquivo>.pdf" --pages 21-30  # extração+limpeza
-melhorador-textos prepare-lt --input "_output/<doc>/pages-XXX-YYY/cleaned.md"
-melhorador-textos import-lt --original <original.txt> --corrected <corrected.md>
+brew install python@3.12 tesseract tesseract-lang ghostscript qpdf unpaper languagetool
+cd _CLI && python3.12 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+python -m pytest                              # 61 testes CLI (de _CLI/)
+bash _CLI/melhorar.sh                         # lote CLI (da raiz)
+melhorador-textos extract --input "_originais/<arquivo>.pdf" --pages 21-30
+cd _APP/core && cargo test --release          # core Rust + goldens (sempre --release)
+cd _APP && npm run tauri dev                  # janela do app
 ```
 
-Gerenciador: `pip` dentro de `.venv` (Python 3.12). Não misturar com o Python do sistema (3.9).
+Gerenciador: `pip` dentro de `_CLI/.venv` (Python 3.12); não misturar com o Python do sistema. Comandos do CLI rodam **da raiz**. App: Rust stable + Node; o CLI é a referência dos golden masters. OCR do app ainda usa Tesseract do Homebrew.
 
 ## Code style
 
@@ -33,15 +36,16 @@ Padrão universal: `~docs/~work_guidelines/protocols/CODE_STYLE.md`.
 
 ## Testing
 
-- `python -m pytest` (testes de `cleanup`, `structure` e `languagetool_review` em `tests/`).
-- Smoke test de OCR real: `extract --pages 1-50` no PDF Mesopotâmia.
+- CLI: `cd _CLI && .venv/bin/python -m pytest` (61).
+- Core: `cd _APP/core && cargo test --release` (goldens em `_temp/goldens/` — local-only).
+- Modo paridade (`clean_text` / `apply_structure`) = CLI. Modo aprimorado = app; não quebrar goldens.
 - Teste de máquina ≠ teste de UI. Ver `~docs/~work_guidelines/protocols/DOD.md`.
 
 ## Security & Boundaries
 
 **Permitido:** editar código/docs do escopo aprovado, rodar testes/lint quando existirem, criar branch.
 
-**Confirmar (APAE):** deploy, migração estrutural, tocar > 2 arquivos, escolha/troca de stack, **OCR integral de PDFs grandes** (a PoC processa só faixas de páginas; o livro completo de 578 páginas exige autorização).
+**Confirmar (APAE):** deploy, migração estrutural, tocar > 2 arquivos, escolha/troca de stack, **OCR em lote de livros inteiros**.
 
 **Proibido:**
 - Commitar ou logar secrets / `.env` / tokens.
@@ -49,7 +53,15 @@ Padrão universal: `~docs/~work_guidelines/protocols/CODE_STYLE.md`.
 - Commitar pastas protegidas: `_bkps/ _resources/ _ originais/ _docs/ _tests/`.
 - Commitar PDFs brutos ou assets de livros (`_resources/`, `_ originais/`) — local-only.
 - Inventar ou “completar” texto do livro que não esteja na fonte OCR/PDF.
-- **Usar IA/LLM** em qualquer etapa do pipeline (OCR neural generativo, reescrita por modelo, classificação por embedding, etc.). Stack = OCR clássico + heurísticas determinísticas + revisão humana opcional.
+- **Usar IA/LLM em extração, OCR, limpeza ou estrutura.** Essas etapas = Tesseract clássico + regras fixas + (no CLI) LanguageTool humano.
+
+**IA local permitida só na revisão (emenda 16/Ago):**
+- Opt-in, desligada por padrão, no aparelho (sem nuvem).
+- Só **propõe** diff; nada entra no texto sem o Zander aceitar.
+- Vocabulário do livro = lista de termos extraídos do próprio OCR/texto nativo, com âncora na fonte — não é invenção.
+- Regras que o usuário ensina (marca cabeçalho, nota, etc.) vêm **antes** de qualquer modelo; o modelo só entra se as regras não bastarem.
+- Proposta que adicione conteúdo sem âncora no original, ou reescreva o estilo do autor, é rejeitada.
+- LanguageTool (local ou Premium) continua válido como revisão sem LLM.
 
 ## Commit & PR
 
@@ -87,9 +99,9 @@ Skills: `.agent/skills/*/SKILL.md` — ler `golden-rules` primeiro.
 ## Definition of Done (auto-verificável)
 
 - [ ] Requisitos aprovados atendidos (nada além do escopo).
-- [ ] Build/test/lint OK quando a stack existir; nesta fase scaffold, estrutura e docs consistentes.
+- [ ] Build/test/lint OK quando a stack existir.
 - [ ] Texto melhorado não inventa conteúdo ausente na fonte.
-- [ ] Docs atualizados (`_docs/BACKLOG.md` / PRD) quando a convenção muda.
+- [ ] Docs atualizados (`_docs/BACKLOG-MELHORADOR.md` / `PRD-MELHORADOR.md`) quando a convenção muda.
 - [ ] `bash "../~scripts/docs/check-docs.sh" .` verde (quando tocar `_docs/` no disco).
 - [ ] Sem secrets nem PDFs brutos no diff.
 
@@ -100,8 +112,9 @@ DoD universal: `~docs/~work_guidelines/protocols/DOD.md`.
 | Dado | Valor |
 |---|---|
 | Caminho do projeto | `/Users/zander/Documents/_ coding/_ melhorador de textos` |
-| Ambiente local | `.venv` (Python 3.12) · CLI `melhorador-textos` |
+| Ambiente local | `_CLI/.venv` (Python 3.12) · CLI `melhorador-textos` · Rust 1.97 · Node 26 |
+| Código | `_CLI/` (Python, referência) · `_APP/` (Tauri 2: core Rust + UI TS) |
 | Saídas | `_output/` e `_temp/` (local-only, fora do git) |
 | Produção | N/A (ainda) |
 
-<!-- Última atualização: 2026-07-25 · Versão: 0.1.0-poc -->
+<!-- Última atualização: 2026-08-16 · Versão: 0.2.0-poc -->

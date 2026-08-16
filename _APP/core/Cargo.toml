@@ -1,0 +1,25 @@
+# ==============================================================================
+# SCRIPT: Cargo.toml (melhorador-core)
+# DESCRIÇÃO: Crate do pipeline determinístico — port fiel do CLI Python (_CLI/)
+# CHAMADO POR: src-tauri (dependência de caminho, fase F2) e `cargo test`
+# CONTRATO (RESPOSTA ESPERADA): paridade byte a byte com os golden masters
+# ==============================================================================
+[package]
+name = "melhorador-core"
+version = "0.1.0"
+edition = "2021"
+description = "Pipeline determinístico de limpeza/estrutura de texto OCR (port do CLI Python)"
+license = "MIT"
+
+[dependencies]
+# Regex padrão (sem look-around) para as regras simples.
+regex = "1"
+# Look-behind/look-ahead das heurísticas portadas do Python (módulo `re`).
+fancy-regex = "0.14"
+# NFD/NFC — paridade com unicodedata.normalize do Python.
+unicode-normalization = "0.1"
+# Render de PDF (PDFium via dylib carregada em runtime) + OCR (Tesseract).
+pdfium-render = { version = "0.8", features = ["image"] }
+leptess = "0.14"
+# Conversão de bitmap para PNG em memória (entrada do Tesseract).
+image = "0.25"
