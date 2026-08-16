@@ -51,6 +51,8 @@ O CLI **não some**. Ele congela o comportamento de referência. O core Rust pro
 
 **IA local (emenda 16/Ago):** permitida **só como revisão opt-in**, desligada por padrão, no aparelho. Não entra em extração, OCR, limpeza nem estrutura. Vocabulário do livro = termos extraídos do próprio texto (âncora na fonte). Modelo que inventar ou reescrever estilo é reprovado. Ver `AGENTS.md`.
 
+**IA na nuvem (emenda 16/Ago — 3ª opção de revisão):** o usuário pode enviar o texto a uma API de sua preferência (formato OpenAI: URL + modelo + chave). Opt-in com aviso explícito de que o texto sai do computador. Continua só propondo diff.
+
 ## 5. Rotina do app (alvo de produto)
 
 Decisão de ideação 16/Ago. **Primeiro uso diário = esta lista inteira.** Aprender = regras salvas primeiro; ajustar modelo só se as regras não bastarem.

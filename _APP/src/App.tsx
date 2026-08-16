@@ -108,6 +108,9 @@ function App() {
   const [ltUrl, setLtUrl] = useState("http://localhost:8081");
   const [ltUser, setLtUser] = useState("");
   const [ltKey, setLtKey] = useState("");
+  const [cloudUrl, setCloudUrl] = useState("https://api.openai.com/v1");
+  const [cloudModel, setCloudModel] = useState("gpt-4o-mini");
+  const [cloudKey, setCloudKey] = useState("");
   const langRef = useRef(lang);
   langRef.current = lang;
   const stopAllRef = useRef(false);
@@ -439,7 +442,35 @@ function App() {
     void invoke<{ localUrl?: string; local_url?: string }>("get_lt_settings")
       .then((s) => setLtUrl(s.localUrl || s.local_url || "http://localhost:8081"))
       .catch(() => undefined);
+    void invoke<{ baseUrl?: string; base_url?: string; model?: string }>("get_cloud_ai_settings")
+      .then((s) => {
+        setCloudUrl(s.baseUrl || s.base_url || "https://api.openai.com/v1");
+        if (s.model) setCloudModel(s.model);
+      })
+      .catch(() => undefined);
   }, []);
+
+  async function runCloudAi() {
+    if (!result) return;
+    const ok = window.confirm(
+      "IA na nuvem: o texto do livro SAI do seu computador e vai para o serviço que você configurou. Continuar?",
+    );
+    if (!ok) return;
+    setReviewBusy(true);
+    setError(null);
+    try {
+      const report = await invoke<ReviewReport>("check_cloud_ai", {
+        text: result.cleaned,
+      });
+      setReview(report);
+      setAccepted(new Set());
+      setInfo(report.note);
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setReviewBusy(false);
+    }
+  }
 
   async function applyAccepted() {
     if (!result || !review) return;
@@ -712,7 +743,7 @@ function App() {
                 ))}
               </ul>
             )}
-            <p className="hint">Baixar outro modelo aberto (.gguf):</p>
+            <p className="hint">Baixar outro modelo aberto (.gguf) para usar offline:</p>
             <div className="rules-form">
               <input
                 type="text"
@@ -740,6 +771,71 @@ function App() {
                 }
               >
                 Baixar modelo
+              </button>
+            </div>
+            <p className="hint" style={{ marginTop: 12 }}>
+              IA na nuvem — API no formato OpenAI (URL + modelo + chave). O texto sai
+              do computador.
+            </p>
+            <div className="rules-form">
+              <input
+                type="text"
+                placeholder="URL base (…/v1)"
+                value={cloudUrl}
+                onChange={(e) => setCloudUrl(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="modelo"
+                value={cloudModel}
+                onChange={(e) => setCloudModel(e.target.value)}
+              />
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  void invoke("save_cloud_ai_settings", {
+                    settings: {
+                      baseUrl: cloudUrl,
+                      model: cloudModel,
+                      enabled: true,
+                    },
+                  })
+                    .then(() => setInfo("IA nuvem: URL/modelo salvos"))
+                    .catch((e) => setError(errText(e)))
+                }
+              >
+                Salvar URL/modelo
+              </button>
+            </div>
+            <div className="rules-form">
+              <input
+                type="password"
+                placeholder="API key"
+                value={cloudKey}
+                onChange={(e) => setCloudKey(e.target.value)}
+              />
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  void invoke("save_cloud_ai_key", { apiKey: cloudKey })
+                    .then(() => {
+                      setCloudKey("");
+                      setInfo("Chave da IA nuvem guardada no Mac");
+                    })
+                    .catch((e) => setError(errText(e)))
+                }
+              >
+                Guardar chave no Mac
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={reviewBusy || !result}
+                onClick={() => void runLtPremium()}
+              >
+                LanguageTool Premium (nuvem)
               </button>
             </div>
           </>
@@ -819,9 +915,9 @@ function App() {
                 type="button"
                 className="secondary"
                 disabled={reviewBusy}
-                onClick={() => void runLtPremium()}
+                onClick={() => void runCloudAi()}
               >
-                LanguageTool Premium (nuvem)
+                Revisar com IA na nuvem
               </button>
             </div>
             {acceptedTrail.length > 0 && (

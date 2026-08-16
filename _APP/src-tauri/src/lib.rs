@@ -5,6 +5,7 @@
 // CONTRATO (RESPOSTA ESPERADA): ProcessResult ou "CANCELLED" / erro legível
 // ==============================================================================
 
+mod cloud_ai;
 mod gguf;
 mod lt;
 
@@ -131,10 +132,26 @@ fn load_lt_settings(app: &AppHandle) -> lt::LtSettings {
     let Ok(path) = settings_path(app) else {
         return lt::LtSettings::default();
     };
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return lt::LtSettings::default();
+    };
+    // Arquivo mesclado ou legado só-LT
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+        let local_url = v
+            .get("local_url")
+            .and_then(|x| x.as_str())
+            .unwrap_or("http://localhost:8081")
+            .to_string();
+        let premium_enabled = v
+            .get("premium_enabled")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false);
+        return lt::LtSettings {
+            local_url,
+            premium_enabled,
+        };
+    }
+    lt::LtSettings::default()
 }
 
 #[tauri::command]
@@ -142,10 +159,80 @@ fn get_lt_settings(app: AppHandle) -> Result<lt::LtSettings, String> {
     Ok(load_lt_settings(&app))
 }
 
+fn load_cloud_ai_settings(app: &AppHandle) -> cloud_ai::CloudAiSettings {
+    let Ok(path) = settings_path(app) else {
+        return cloud_ai::CloudAiSettings::default();
+    };
+    // settings.json pode ter lt + cloud; lemos objeto amplo
+    #[derive(serde::Deserialize, Default)]
+    struct AllSettings {
+        #[serde(default)]
+        local_url: Option<String>,
+        #[serde(default)]
+        premium_enabled: Option<bool>,
+        #[serde(default)]
+        cloud_ai: Option<cloud_ai::CloudAiSettings>,
+        #[serde(flatten)]
+        _rest: std::collections::HashMap<String, serde_json::Value>,
+    }
+    let raw = std::fs::read_to_string(path).ok();
+    if let Some(raw) = raw {
+        if let Ok(all) = serde_json::from_str::<AllSettings>(&raw) {
+            if let Some(c) = all.cloud_ai {
+                return c;
+            }
+        }
+        // legado: só LtSettings
+        if let Ok(lt) = serde_json::from_str::<lt::LtSettings>(&raw) {
+            let _ = lt;
+        }
+    }
+    cloud_ai::CloudAiSettings::default()
+}
+
+#[tauri::command]
+fn get_cloud_ai_settings(app: AppHandle) -> Result<cloud_ai::CloudAiSettings, String> {
+    Ok(load_cloud_ai_settings(&app))
+}
+
+#[tauri::command]
+fn save_cloud_ai_settings(
+    app: AppHandle,
+    settings: cloud_ai::CloudAiSettings,
+) -> Result<(), String> {
+    let path = settings_path(&app)?;
+    // Mescla com LT settings existentes
+    let lt = load_lt_settings(&app);
+    let merged = serde_json::json!({
+        "local_url": lt.local_url,
+        "premium_enabled": lt.premium_enabled,
+        "cloud_ai": settings,
+    });
+    let json = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
+    std::fs::write(path, json).map_err(|e| format!("settings: {e}"))
+}
+
+#[tauri::command]
+fn save_cloud_ai_key(api_key: String) -> Result<(), String> {
+    cloud_ai::save_api_key(&api_key)
+}
+
+#[tauri::command]
+fn check_cloud_ai(app: AppHandle, text: String) -> Result<melhorador_core::review::ReviewReport, String> {
+    let settings = load_cloud_ai_settings(&app);
+    cloud_ai::propose_cloud_review(&text, &settings)
+}
+
 #[tauri::command]
 fn save_lt_settings(app: AppHandle, settings: lt::LtSettings) -> Result<(), String> {
     let path = settings_path(&app)?;
-    let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
+    let cloud = load_cloud_ai_settings(&app);
+    let merged = serde_json::json!({
+        "local_url": settings.local_url,
+        "premium_enabled": settings.premium_enabled,
+        "cloud_ai": cloud,
+    });
+    let json = serde_json::to_string_pretty(&merged).map_err(|e| e.to_string())?;
     std::fs::write(path, json).map_err(|e| format!("settings: {e}"))
 }
 
@@ -569,7 +656,11 @@ pub fn run() {
             list_gguf_models,
             select_gguf_model,
             remove_gguf_model,
-            download_gguf_model
+            download_gguf_model,
+            get_cloud_ai_settings,
+            save_cloud_ai_settings,
+            save_cloud_ai_key,
+            check_cloud_ai
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
