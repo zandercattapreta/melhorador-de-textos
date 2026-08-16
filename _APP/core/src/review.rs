@@ -185,7 +185,7 @@ pub fn propose_llama_review(text: &str, model_path: &std::path::Path) -> ReviewR
         .into_iter()
         .find(|b| std::process::Command::new(b).arg("--version").output().is_ok());
     let Some(bin) = bin else {
-        base.note = "llama.cpp não encontrado no PATH. Instale e selecione um GGUF.".into();
+        base.note = "llama-cli não encontrado. O modelo Gemma do CoTypist já está detectado; para usá-lo na revisão, instale llama.cpp (ex.: brew install llama.cpp) ou baixe llama-cli.".into();
         base.engine = "heuristic+unavailable_llm".into();
         return base;
     };
@@ -208,7 +208,7 @@ pub fn propose_llama_review(text: &str, model_path: &std::path::Path) -> ReviewR
             let mut llm = parse_llm_proposals(text, &stdout);
             base.proposals.append(&mut llm);
             base.engine = format!("heuristic+{bin}");
-            base.note = "Propostas heurísticas + LLM local. Nada aplicado sem aceite.".into();
+            base.note = "IA local com o modelo selecionado (Gemma do CoTypist ou outro .gguf). Nada aplicado sem você aceitar.".into();
             base.vocabulary = vocabulary;
             base
         }

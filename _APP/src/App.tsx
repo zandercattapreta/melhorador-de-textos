@@ -101,7 +101,7 @@ function App() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [gguf, setGguf] = useState<{
     selected: string | null;
-    catalog: { name: string; bytes: number }[];
+    catalog: { name: string; bytes: number; source?: string }[];
   } | null>(null);
   const [ggufUrl, setGgufUrl] = useState("");
   const [ggufName, setGgufName] = useState("");
@@ -426,7 +426,7 @@ function App() {
     try {
       const st = await invoke<{
         selected: string | null;
-        catalog: { name: string; bytes: number }[];
+        catalog: { name: string; bytes: number; source?: string }[];
       }>("list_gguf_models");
       setGguf(st);
     } catch (e) {
@@ -664,10 +664,55 @@ function App() {
             </div>
 
             <p className="hint" style={{ marginTop: 12 }}>
-              IA local — modelo GGUF (opcional). Precisa do programa llama-cli no
-              computador.
-              {gguf?.selected ? ` Modelo: ${gguf.selected}` : " Nenhum modelo ainda."}
+              IA local — por padrão usa o Gemma do CoTypist (se estiver no Mac). Você
+              pode escolher outro modelo aberto ou baixar um novo.
+              {gguf?.selected
+                ? ` Em uso: ${gguf.selected}`
+                : " Nenhum modelo encontrado ainda."}
             </p>
+            {gguf && gguf.catalog.length > 0 && (
+              <ul className="rules-list">
+                {gguf.catalog.map((m) => (
+                  <li key={`${m.source}-${m.name}`}>
+                    <span>
+                      {m.name} ({Math.round(m.bytes / 1e6)} MB)
+                      {m.source === "cotypist" ? " · CoTypist" : " · baixado"}
+                      {gguf.selected === m.name ? " · ativo" : ""}
+                    </span>
+                    <span>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() =>
+                          void invoke("select_gguf_model", { name: m.name })
+                            .then(() => refreshModels())
+                            .catch((e) => setError(errText(e)))
+                        }
+                      >
+                        Usar
+                      </button>
+                      {m.source !== "cotypist" && (
+                        <>
+                          {" "}
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() =>
+                              void invoke("remove_gguf_model", { name: m.name })
+                                .then(() => refreshModels())
+                                .catch((e) => setError(errText(e)))
+                            }
+                          >
+                            Remover
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="hint">Baixar outro modelo aberto (.gguf):</p>
             <div className="rules-form">
               <input
                 type="text"
@@ -697,28 +742,6 @@ function App() {
                 Baixar modelo
               </button>
             </div>
-            {gguf && gguf.catalog.length > 0 && (
-              <ul className="rules-list">
-                {gguf.catalog.map((m) => (
-                  <li key={m.name}>
-                    <span>
-                      {m.name} ({Math.round(m.bytes / 1e6)} MB)
-                    </span>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() =>
-                        void invoke("select_gguf_model", { name: m.name })
-                          .then(() => refreshModels())
-                          .catch((e) => setError(errText(e)))
-                      }
-                    >
-                      Usar
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
           </>
         )}
       </section>
