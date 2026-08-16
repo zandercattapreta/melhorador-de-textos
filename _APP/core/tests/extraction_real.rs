@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: extraction_real.rs (melhorador-core, teste de integração)
+// SCRIPT: extraction_real.rs (txtmelhorator-core, teste de integração)
 // DESCRIÇÃO: QA de conteúdo do OCR embutido contra um livro real do acervo
 // CHAMADO POR: cargo test --release (pula se _originais/ não existir)
 // CONTRATO (RESPOSTA ESPERADA): OCR reconhece o conteúdo esperado da amostra
@@ -10,7 +10,7 @@
 
 use std::path::PathBuf;
 
-use melhorador_core::extraction::extract_pdf;
+use txtmelhorator_core::extraction::extract_pdf;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -32,7 +32,7 @@ fn ocr_reconhece_paginas_do_livro_real() {
         Some((21, 23)),
         "por+eng",
         None,
-        &mut |done, total, page_text| {
+        &mut |done, total, page_text, _preview| {
             calls += 1;
             assert!(done <= total);
             assert!(!page_text.is_empty(), "texto parcial da página deve vir no callback");

@@ -4,11 +4,11 @@ tipo: backlog
 atualizado_em: 2026-08-16
 ---
 
-# Backlog — Melhorador de Textos
+# Backlog — TXTMelhorator
 
-Fonte de produto: [`PRD-MELHORADOR.md`](PRD-MELHORADOR.md) §5 · motores: [`ARQUITETURA-MELHORADOR.md`](ARQUITETURA-MELHORADOR.md) §2.
+Fonte de produto: [`PRD-MELHORADOR.md`](PRD-MELHORADOR.md) §5 · motores: [`ARQUITETURA-MELHORADOR.md`](ARQUITETURA-MELHORADOR.md) §2 · UI: [`DESIGN-SYSTEM-APP.md`](DESIGN-SYSTEM-APP.md).
 
-Fila de construção do **app** = **R1 → R5**. CLI = referência estável (ver § CLI).
+Fila de construção do **app** = **R1 → R5** (R5c aberta) · redesign UI = **U8 → U10**. CLI = referência estável (ver § CLI).
 
 ---
 
@@ -20,7 +20,7 @@ Fila de construção do **app** = **R1 → R5**. CLI = referência estável (ver
 | **R2** | Layout: colunas, juntas, blocos, tabelas, notas | A13, M2–M6 | ✅ (+ preprocess contraste; hOCR fino = depois) |
 | **R3** | Conferência lado a lado | A15, M10 | ✅ |
 | **R4** | Regras que o usuário ensina | A14, M7 | ✅ |
-| **R5** | IA local opt-in + vocabulário | A16, M8–M9 | ✅ (heurística + GGUF via llama-cli + UI) |
+| **R5** | IA local opt-in + vocabulário | A16, M8–M9 | ✅ in-process (`llama-cpp-2` + Metal) |
 
 ### Detalhe R1–R4
 - [x] R1a+R1b, R2a+R2b1+R2b2, R3a+R3b, R4
@@ -33,8 +33,11 @@ Fila de construção do **app** = **R1 → R5**. CLI = referência estável (ver
 - [x] Emenda AGENTS + golden-rules
 - [x] Vocabulário + guardrail + diff aceitar/rejeitar
 - [x] Benchmark de fidelidade pt-BR (teste `fidelity_benchmark_ok`)
-- [x] Gerenciador GGUF (download+hash, remoção, seleção)
-- [x] `llama.cpp` via binário no PATH (`llama-cli`); prompt de fidelidade → diff
+- [x] Gerenciador GGUF (download+hash, remoção, seleção; CoTypist Gemma)
+- [x] UI: botão IA local / nuvem / LT
+- [x] **R5c — Inferência embutida:** `llama.cpp` linkado no binário (`llama-cpp-2` + Metal); **sem** `llama-cli`/Ollama/app externo
+- [x] Remover dependência de binário no PATH
+- [~] PoC antigo via `llama-cli` no PATH — **removido** (16/Ago)
 
 ### Revisão LT no app
 - [x] Conta Premium no keychain + aviso de nuvem (A10)
@@ -53,6 +56,35 @@ Fila de construção do **app** = **R1 → R5**. CLI = referência estável (ver
 - [x] Port `metadata` (ficha → slug) no core Rust
 - [x] `report.json` no app (ao salvar)
 
+### UI — redesign (Claude / frontend-design + DS)
+
+Pedido Zander 16/Ago: redesenhar a interface via skill Claude Design / `frontend-design`, alinhado a [`DESIGN-SYSTEM-APP.md`](DESIGN-SYSTEM-APP.md) (papel e tinta; texto do livro = protagonista).
+
+| ID | Entrega | Estado |
+|---|---|---|
+| **U1** | Layout 3 colunas fixas: **Abrir** \| **Original** \| **Texto** | ✅ parcial |
+| **U2** | Tipografia Source Serif 4 no texto do livro; rail quieto | ✅ |
+| **U3** | Revisão / Ajustes / modelos / LT em painéis recolhidos (não entulham) | ✅ |
+| **U4** | Remover slogans e ruído de UI | ✅ |
+| **U5** | PDF acompanha OCR (preview no evento de progresso; sem reabrir PDF) | ✅ |
+| **U6** | OCR híbrido (nativo + OCR só em páginas mudas/capa) | ✅ |
+| **U7** | Conferência pós-processamento: Ant/Próx sync página↔texto | ✅ (já R3; manter no redesign) |
+| **U8** | Polish DS: tema claro/escuro, densidade, foco teclado, empty states | ⬜ |
+| **U9** | Tela fila/biblioteca (T1 do DS) se ainda fizer sentido vs. fluxo atual | ⬜ |
+| **U10** | Diff viewer de revisão (inline serif) conforme DS §2 | ⬜ |
+
+**Critério de pronto U\*:** Zander usa 1 livro completo sem “Carregando…” eterno; 3 colunas legíveis; revisão só sob demanda.
+
+### IA local — runtime no app (produto)
+
+| ID | Entrega | Estado |
+|---|---|---|
+| **R5c** | `llama.cpp` **in-process** no app (sem app externo) | ✅ |
+| **R5d** | Carregar GGUF sob demanda / descarregar após revisão | ✅ (load por chamada) |
+| **R5e** | Metal (Apple Silicon) quando disponível | ✅ (feature metal) |
+
+Alinhado a [`PLANO-APP-MELHORADOR.md`](PLANO-APP-MELHORADOR.md) e [`ARQUITETURA-MELHORADOR.md`](ARQUITETURA-MELHORADOR.md): “Não há servidor de IA… llama.cpp linkado no binário”.
+
 ---
 
 ## Feito (resumo)
@@ -66,6 +98,7 @@ Fila de construção do **app** = **R1 → R5**. CLI = referência estável (ver
 
 ### App
 - [x] R1–R5 + LT + docx + report + GGUF manager + metadata + preprocess
+- [x] Redesign UI U1–U7 (em curso U8–U10)
 
 ---
 

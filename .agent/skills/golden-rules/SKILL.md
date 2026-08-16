@@ -1,9 +1,9 @@
 ---
 name: Golden Rules
-description: Regras fundamentais do projeto Melhorador de Textos
+description: Regras fundamentais do projeto TXTMelhorator
 ---
 
-# Skill: Golden Rules — Melhorador de Textos
+# Skill: Golden Rules — TXTMelhorator
 
 Consulte as regras universais em:
 `~docs/~work_guidelines/protocols/GOLDEN_RULES.md`

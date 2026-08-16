@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: report.rs (melhorador-core)
+// SCRIPT: report.rs (txtmelhorator-core)
 // DESCRIÇÃO: Contrato report.json (paridade CLI) + trilha de diffs aprovados
 // CHAMADO POR: save_result no app
 // CONTRATO (RESPOSTA ESPERADA): JSON serializável com hashes e stats

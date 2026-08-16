@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: extraction.rs (melhorador-core)
+// SCRIPT: extraction.rs (txtmelhorator-core)
 // DESCRIÇÃO: Extração de texto de PDF — nativo (PDFium) ou OCR (Tesseract)
 // CHAMADO POR: src-tauri (comando process_pdf); tests/extraction_real.rs
 // CONTRATO (RESPOSTA ESPERADA): ExtractionResult { raw_text, engine, ... }
@@ -11,11 +11,12 @@
 //! Python: engines de render/OCR distintos produzem texto equivalente, não
 //! idêntico. O critério de aceite é QA de conteúdo (golden de qualidade).
 //!
-//! Estratégia (espelho da extraction.py):
+//! Estratégia (espelho da extraction.py + híbrido):
 //! 1. Carrega o PDF e seleciona a faixa de páginas pedida.
 //! 2. Tenta texto nativo; abaixo de 200 chars, considera escaneado.
-//! 3. Escaneado → renderiza cada página (~300 DPI, tons de cinza) e OCR.
-//! 4. Junta páginas com \f (mesmo formato do sidecar que o cleanup espera).
+//! 3. Se nativo ok, ainda assim OCR nas páginas vazias/[figura] (capa, gravura).
+//! 4. Escaneado total → renderiza cada página (~300 DPI) e OCR.
+//! 5. Junta páginas com \f (mesmo formato do sidecar que o cleanup espera).
 
 use std::path::Path;
 
@@ -193,8 +194,7 @@ pub fn detect_ocr_languages(sample: &str) -> &'static str {
 }
 
 /// Extrai texto de um PDF. `pages` = faixa 1-indexada inclusiva (opcional).
-/// `progress(feitas, total, texto_da_pagina)` é chamado por página na fase
-/// de OCR — permite à UI mostrar o processamento parcial em tempo real.
+/// `progress(página, total, texto, preview_png)` — preview só nas páginas OCR.
 /// `should_cancel`: se retornar true entre páginas, aborta com [`CANCELLED`].
 /// `user_rules`: regras NoJoin (R4) aplicadas no transporte entre páginas.
 pub fn extract_pdf(
@@ -203,7 +203,7 @@ pub fn extract_pdf(
     pages: Option<(usize, usize)>,
     languages: &str,
     tessdata_dir: Option<&Path>,
-    progress: &mut dyn FnMut(usize, usize, &str),
+    progress: &mut dyn FnMut(usize, usize, &str, Option<&[u8]>),
     should_cancel: Option<&dyn Fn() -> bool>,
     user_rules: &[crate::rules::UserRule],
 ) -> Result<ExtractionResult, String> {
@@ -304,7 +304,10 @@ pub fn extract_pdf(
         // Sem linhas em branco na camada nativa o reflow fundiria tudo:
         // inferimos fronteiras de parágrafo antes do pipeline.
         let page_text = infer_paragraph_breaks(&body);
-        native_parts.push(crate::blocks::figure_placeholder_if_empty(&page_text));
+        let page_out = crate::blocks::figure_placeholder_if_empty(&page_text);
+        // Acompanha contador na UI; preview só no OCR (evita abrir o PDF de novo).
+        progress(p, end, "", None);
+        native_parts.push(page_out);
     }
     if !carry.is_empty() {
         // Livro terminou com hífen pendente: devolve o fragmento.
@@ -322,19 +325,59 @@ pub fn extract_pdf(
     // rodapés de PDFs com texto embutido (comprovado nos gabaritos: Paideia
     // h1=0/headers=0). Com \f, a máquina de limpeza validada funciona igual
     // nos dois caminhos.
-    let native_text = native_parts.join("\u{0c}");
-    let native_chars = native_text.trim().chars().count();
+    let native_chars = native_parts
+        .iter()
+        .map(|p| p.trim().chars().count())
+        .sum::<usize>();
+    let n = selected.len();
+    let range_end = *selected.last().unwrap_or(&end);
+
+    // --- 3. Nativo suficiente: preenche com OCR só as páginas mudas ---
     if native_chars >= NATIVE_TEXT_MIN_CHARS {
+        let empty_idx: Vec<usize> = native_parts
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| page_needs_ocr_fill(t))
+            .map(|(i, _)| i)
+            .collect();
+        if empty_idx.is_empty() {
+            return Ok(ExtractionResult {
+                raw_text: native_parts.join("\u{0c}"),
+                engine: "native",
+                page_count: n,
+                native_chars,
+                ocr_chars: 0,
+            });
+        }
+
+        let tessdata = tessdata_dir
+            .map(|p| p.to_string_lossy().into_owned())
+            .or_else(default_tessdata);
+        let mut ocr = LepTess::new(tessdata.as_deref(), languages)
+            .map_err(|e| format!("Tesseract indisponível (idiomas {languages}): {e}"))?;
+        let config = PdfRenderConfig::new().scale_page_by_factor(RENDER_SCALE);
+        let mut ocr_chars = 0usize;
+        for &i in &empty_idx {
+            check_cancel(should_cancel)?;
+            let p = selected[i];
+            let (page_text, preview) = ocr_one_page(&document, &mut ocr, &config, p)?;
+            // done/total = nº real da página / última da faixa (UI acompanha o PDF).
+            progress(p, range_end, &page_text, Some(&preview));
+            ocr_chars += page_text.trim().chars().count();
+            if !crate::blocks::is_near_empty_page(&page_text) {
+                native_parts[i] = page_text;
+            }
+        }
         return Ok(ExtractionResult {
-            raw_text: native_text,
-            engine: "native",
-            page_count: selected.len(),
+            raw_text: native_parts.join("\u{0c}"),
+            engine: "hybrid",
+            page_count: n,
             native_chars,
-            ocr_chars: 0,
+            ocr_chars,
         });
     }
 
-    // --- 3. OCR página a página ---
+    // --- 4. Escaneado: OCR em todas as páginas ---
     let tessdata = tessdata_dir
         .map(|p| p.to_string_lossy().into_owned())
         .or_else(default_tessdata);
@@ -343,31 +386,10 @@ pub fn extract_pdf(
 
     let config = PdfRenderConfig::new().scale_page_by_factor(RENDER_SCALE);
     let mut ocr_parts: Vec<String> = Vec::new();
-    let n = selected.len();
-    for (done, &p) in selected.iter().enumerate() {
+    for &p in &selected {
         check_cancel(should_cancel)?;
-        let page = document
-            .pages()
-            .get((p - 1) as u16)
-            .map_err(|e| format!("Página {p}: {e}"))?;
-        let bitmap = page
-            .render_with_config(&config)
-            .map_err(|e| format!("Render da página {p} falhou: {e}"))?;
-        // Tons de cinza + contraste leve (pré-processamento R2).
-        let gray = crate::preprocess::prepare_for_ocr(&bitmap.as_image());
-
-        // PNG em memória: formato que a Leptonica lê de buffer.
-        let mut png: Vec<u8> = Vec::new();
-        PngEncoder::new(&mut png)
-            .write_image(&gray, gray.width(), gray.height(), ExtendedColorType::L8)
-            .map_err(|e| format!("PNG da página {p} falhou: {e}"))?;
-
-        ocr.set_image_from_mem(&png)
-            .map_err(|e| format!("Tesseract não leu a página {p}: {e}"))?;
-        let page_text = ocr
-            .get_utf8_text()
-            .map_err(|e| format!("OCR da página {p} falhou: {e}"))?;
-        progress(done + 1, n, &page_text);
+        let (page_text, preview) = ocr_one_page(&document, &mut ocr, &config, p)?;
+        progress(p, range_end, &page_text, Some(&preview));
         ocr_parts.push(page_text);
     }
 
@@ -381,6 +403,74 @@ pub fn extract_pdf(
         native_chars,
         ocr_chars,
     })
+}
+
+/// Página nativa sem prosa útil → precisa de OCR de preenchimento.
+fn page_needs_ocr_fill(text: &str) -> bool {
+    let t = text.trim();
+    t.is_empty() || t == "[figura]" || crate::blocks::is_near_empty_page(t)
+}
+
+fn ocr_one_page(
+    document: &PdfDocument<'_>,
+    ocr: &mut LepTess,
+    config: &PdfRenderConfig,
+    page_num: usize,
+) -> Result<(String, Vec<u8>), String> {
+    let page = document
+        .pages()
+        .get((page_num - 1) as u16)
+        .map_err(|e| format!("Página {page_num}: {e}"))?;
+    let bitmap = page
+        .render_with_config(config)
+        .map_err(|e| format!("Render da página {page_num} falhou: {e}"))?;
+    let dynamic = bitmap.as_image();
+    // Preview p/ a UI (mesmo bitmap do OCR, reduzido) — sem reabrir o PDF.
+    let preview = encode_ui_preview_png(&dynamic, page_num)?;
+    // Tons de cinza + contraste leve (pré-processamento R2).
+    let gray = crate::preprocess::prepare_for_ocr(&dynamic);
+
+    // PNG em memória: formato que a Leptonica lê de buffer.
+    let mut png: Vec<u8> = Vec::new();
+    PngEncoder::new(&mut png)
+        .write_image(&gray, gray.width(), gray.height(), ExtendedColorType::L8)
+        .map_err(|e| format!("PNG da página {page_num} falhou: {e}"))?;
+
+    ocr.set_image_from_mem(&png)
+        .map_err(|e| format!("Tesseract não leu a página {page_num}: {e}"))?;
+    let text = ocr
+        .get_utf8_text()
+        .map_err(|e| format!("OCR da página {page_num} falhou: {e}"))?;
+    Ok((text, preview))
+}
+
+/// PNG leve da página para a coluna Original durante o OCR.
+fn encode_ui_preview_png(img: &image::DynamicImage, page_num: usize) -> Result<Vec<u8>, String> {
+    let rgba = img.to_rgba8();
+    let max_w = 900u32;
+    let frame = if rgba.width() > max_w {
+        let h = ((rgba.height() as f64) * (max_w as f64) / (rgba.width() as f64))
+            .round()
+            .max(1.0) as u32;
+        image::imageops::resize(
+            &rgba,
+            max_w,
+            h,
+            image::imageops::FilterType::Triangle,
+        )
+    } else {
+        rgba
+    };
+    let mut png: Vec<u8> = Vec::new();
+    PngEncoder::new(&mut png)
+        .write_image(
+            frame.as_raw(),
+            frame.width(),
+            frame.height(),
+            ExtendedColorType::Rgba8,
+        )
+        .map_err(|e| format!("Preview PNG da página {page_num} falhou: {e}"))?;
+    Ok(png)
 }
 
 /// Página nativa remontada por posição: corpo em ordem de leitura + notas.

@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: golden.rs (melhorador-core, teste de integração)
+// SCRIPT: golden.rs (txtmelhorator-core, teste de integração)
 // DESCRIÇÃO: Paridade byte a byte com o CLI Python nos 4 livros reais
 // CHAMADO POR: cargo test (lê _temp/goldens/, gerado por make_goldens.py)
 // CONTRATO (RESPOSTA ESPERADA): saída Rust == golden Python para todo livro
@@ -12,7 +12,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use melhorador_core::{cleanup, structure};
+use txtmelhorator_core::{cleanup, structure};
 
 /// _APP/core → raiz do projeto (2 níveis acima).
 fn goldens_dir() -> PathBuf {

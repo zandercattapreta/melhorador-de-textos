@@ -1,9 +1,9 @@
 ---
 name: Definition of Done
-description: Critérios de conclusão de tarefas do Melhorador de Textos
+description: Critérios de conclusão de tarefas do TXTMelhorator
 ---
 
-# DoD — Melhorador de Textos
+# DoD — TXTMelhorator
 
 Consulte o DoD universal em:
 `~docs/~work_guidelines/protocols/DOD.md`

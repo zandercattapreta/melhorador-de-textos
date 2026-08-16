@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: pydifflib.rs (melhorador-core)
+// SCRIPT: pydifflib.rs (txtmelhorator-core)
 // DESCRIÇÃO: ratio() do difflib.SequenceMatcher (autojunk=False) em Rust
 // CHAMADO POR: cleanup.rs (deduplicação de páginas escaneadas)
 // CONTRATO (RESPOSTA ESPERADA): mesmo valor (f64) do CPython para os mesmos inputs

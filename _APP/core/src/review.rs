@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: review.rs (melhorador-core)
+// SCRIPT: review.rs (txtmelhorator-core)
 // DESCRIÇÃO: Revisão opt-in (R5) — propõe diffs; nunca aplica sozinha
 // CHAMADO POR: comando Tauri propose_review; UI aceitar/rejeitar
 // CONTRATO (RESPOSTA ESPERADA): lista de propostas ancoradas no texto fonte
@@ -172,58 +172,36 @@ pub fn parse_llm_proposals(text: &str, raw_json: &str) -> Vec<DiffProposal> {
     out
 }
 
-/// Chama `llama-cli` / `llama-server` se existir no PATH + modelo GGUF.
-pub fn propose_llama_review(text: &str, model_path: &std::path::Path) -> ReviewReport {
+/// Combina heurística + saída do modelo (já gerada in-process pelo app).
+pub fn merge_llm_review(text: &str, model_stdout: &str) -> ReviewReport {
     let vocabulary = extract_vocabulary(text, 80);
     let mut base = propose_heuristic_review(text);
+    let mut llm = parse_llm_proposals(text, model_stdout);
+    if llm.is_empty() && model_stdout.trim().is_empty() {
+        base.engine = "ia-local-erro".into();
+        base.note =
+            "A IA local não devolveu sugestões. Tente LanguageTool ou outro trecho.".into();
+        return base;
+    }
+    base.proposals.append(&mut llm);
+    base.engine = "ia-local".into();
+    base.note = "Sugestões da IA local (no app). Nada entra no texto sem você aceitar.".into();
+    base.vocabulary = vocabulary;
+    base
+}
+
+/// @deprecated Substituído por inferência in-process no app (R5c). Mantido p/ testes.
+pub fn propose_llama_review(text: &str, model_path: &std::path::Path) -> ReviewReport {
+    let mut base = propose_heuristic_review(text);
     if !model_path.is_file() {
-        base.note = "Nenhum modelo de IA local selecionado. Use LanguageTool, ou escolha um modelo em Opções.".into();
+        base.note = "Nenhum modelo de IA local selecionado. Use LanguageTool, ou escolha um modelo em Ajustes.".into();
         base.engine = "basico".into();
         return base;
     }
-    let bin = ["llama-cli", "llama-completion", "main"]
-        .into_iter()
-        .find(|b| std::process::Command::new(b).arg("--version").output().is_ok());
-    let Some(bin) = bin else {
-        base.note = "A IA local ainda não está pronta neste computador. O modelo Gemma foi encontrado, mas falta o programa que o executa. Por enquanto use LanguageTool.".into();
-        base.engine = "ia-local-indisponivel".into();
-        return base;
-    };
-    let prompt = fidelity_prompt(text, &vocabulary);
-    let out = std::process::Command::new(bin)
-        .args([
-            "-m",
-            &model_path.to_string_lossy(),
-            "-p",
-            &prompt,
-            "-n",
-            "512",
-            "--temp",
-            "0.1",
-        ])
-        .output();
-    match out {
-        Ok(o) if o.status.success() => {
-            let stdout = String::from_utf8_lossy(&o.stdout);
-            let mut llm = parse_llm_proposals(text, &stdout);
-            base.proposals.append(&mut llm);
-            base.engine = "ia-local".into();
-            base.note = "Sugestões da IA local. Nada entra no texto sem você aceitar.".into();
-            base.vocabulary = vocabulary;
-            base
-        }
-        Ok(o) => {
-            base.engine = "ia-local-erro".into();
-            base.note = "A IA local falhou ao revisar. Tente LanguageTool ou tente de novo.".into();
-            let _ = o;
-            base
-        }
-        Err(_e) => {
-            base.engine = "ia-local-erro".into();
-            base.note = "Não foi possível iniciar a IA local. Use LanguageTool por enquanto.".into();
-            base
-        }
-    }
+    base.engine = "ia-local-indisponivel".into();
+    base.note =
+        "A revisão com IA roda dentro do app (não por programa externo). Abra pelo TXTMelhorator.".into();
+    base
 }
 
 /// Benchmark mínimo de fidelidade: propostas não podem alongar demais.

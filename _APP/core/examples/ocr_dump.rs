@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: ocr_dump.rs (exemplo melhorador-core)
+// SCRIPT: ocr_dump.rs (exemplo txtmelhorator-core)
 // DESCRIÇÃO: OCR de uma faixa de páginas p/ medir qualidade vs gabarito CLI
 // CHAMADO POR: cargo run --release --example ocr_dump -- <pdf> <ini> <fim> <saida>
 // CONTRATO (RESPOSTA ESPERADA): grava raw com \f entre páginas; exit 0
@@ -18,13 +18,13 @@ fn main() {
     let pdfium = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../src-tauri/libs/lib/libpdfium.dylib");
 
-    let result = melhorador_core::extraction::extract_pdf(
+    let result = txtmelhorator_core::extraction::extract_pdf(
         &pdfium,
         &pdf,
         Some((start, end)),
         "por+eng",
         None,
-        &mut |done, total, _| eprintln!("[ocr] {done}/{total}"),
+        &mut |done, total, _, _| eprintln!("[ocr] {done}/{total}"),
         None,
         &[],
     )

@@ -3,7 +3,7 @@
 # SCRIPT: setup.sh
 # DESCRIÇÃO: Verifica/instala dependências e lança servidores (LanguageTool)
 # CHAMADO POR: usuario final (bash setup.sh)
-# SAÍDA: ambiente pronto, servidores rodando, logs em /tmp/melhorador-*.log
+# SAÍDA: ambiente pronto, servidores rodando, logs em /tmp/txtmelhorator-*.log
 # ==============================================================================
 
 set -e
@@ -135,7 +135,7 @@ log_info "Iniciando servidores..."
 
 # LanguageTool Local
 LT_PORT=8081
-LT_LOG="/tmp/melhorador-languagetool.log"
+LT_LOG="/tmp/txtmelhorator-languagetool.log"
 
 # Mata qualquer servidor anterior
 pkill -f "languagetool --http" 2>/dev/null || true
@@ -184,10 +184,10 @@ echo "1. Ativar ambiente:"
 echo "   source .venv/bin/activate"
 echo ""
 echo "2. Rodar batch-extract (já pronto em _output/):"
-echo "   melhorador-textos batch-extract --input-dir _originais"
+echo "   txtmelhorator batch-extract --input-dir _originais"
 echo ""
 echo "3. Revisar textos com LanguageTool local:"
-echo "   melhorador-textos check-lt --input _output/<livro>/pages-XXX-YYY/cleaned.md"
+echo "   txtmelhorator check-lt --input _output/<livro>/pages-XXX-YYY/cleaned.md"
 echo ""
 echo "4. Ver sugestões em:"
 echo "   _output/<livro>/pages-XXX-YYY/languagetool/"

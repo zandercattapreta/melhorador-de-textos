@@ -1,11 +1,11 @@
 // ==============================================================================
-// SCRIPT: lib.rs (melhorador-core)
+// SCRIPT: lib.rs (txtmelhorator-core)
 // DESCRIÇÃO: Raiz do crate — expõe os módulos do pipeline determinístico
 // CHAMADO POR: src-tauri (comandos do app) e testes de paridade
 // CONTRATO (RESPOSTA ESPERADA): mesmas saídas do CLI Python (_CLI/), byte a byte
 // ==============================================================================
 
-//! Port Rust do pipeline do Melhorador de Textos.
+//! Port Rust do pipeline do TXTMelhorator.
 //!
 //! Regra de ouro (herdada do projeto): só estabilizar e reformatar — nunca
 //! completar, adivinhar ou reescrever o conteúdo do livro. Tudo determinístico.

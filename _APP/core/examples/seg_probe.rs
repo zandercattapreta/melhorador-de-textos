@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: seg_probe.rs (exemplo melhorador-core)
+// SCRIPT: seg_probe.rs (exemplo txtmelhorator-core)
 // DESCRIÇÃO: Inspeciona segmentos PDFium (texto+caixa) p/ depurar remontagem
 // CHAMADO POR: cargo run --release --example seg_probe -- <pdf> <pagina> <filtro>
 // CONTRATO (RESPOSTA ESPERADA): lista de segmentos casando o filtro no stderr

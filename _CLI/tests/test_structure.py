@@ -2,11 +2,11 @@
 # SCRIPT: test_structure.py
 # DESCRIÇÃO: Testes de detecção H1–H4 e SUMÁRIO (sem IA)
 # CHAMADO POR: pytest
-# DEPENDÊNCIAS: pytest, melhorador_textos.structure
+# DEPENDÊNCIAS: pytest, txtmelhorator.structure
 # CONTRATO (RESPOSTA ESPERADA): asserts de headings vs prosa
 # ==============================================================================
 
-from melhorador_textos.structure import apply_structure
+from txtmelhorator.structure import apply_structure
 
 
 def test_short_numbered_becomes_h2():

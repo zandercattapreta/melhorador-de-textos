@@ -1,11 +1,11 @@
 # ==============================================================================
-# SCRIPT: Cargo.toml (melhorador-core)
+# SCRIPT: Cargo.toml (txtmelhorator-core)
 # DESCRIÇÃO: Crate do pipeline determinístico — port fiel do CLI Python (_CLI/)
 # CHAMADO POR: src-tauri (dependência de caminho, fase F2) e `cargo test`
 # CONTRATO (RESPOSTA ESPERADA): paridade byte a byte com os golden masters
 # ==============================================================================
 [package]
-name = "melhorador-core"
+name = "txtmelhorator-core"
 version = "0.1.0"
 edition = "2021"
 description = "Pipeline determinístico de limpeza/estrutura de texto OCR (port do CLI Python)"

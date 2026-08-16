@@ -4,13 +4,13 @@ tipo: operacao
 atualizado_em: 2026-08-16
 ---
 
-# Melhorador de Textos — Guia Rápido
+# TXTMelhorator — Guia Rápido
 
 ## Comece agora
 
 ```bash
 # 1. Vá para a pasta do projeto
-cd "/Users/zander/Documents/_ coding/_ melhorador de textos"
+cd "/Users/zander/Documents/_ coding/_ TXTMelhorator"
 
 # 2. Roda tudo (setup + batch-extract + check-lt)
 bash melhorar.sh
@@ -84,7 +84,7 @@ Se precisar rodar **só uma fase** (após o setup inicial):
 ### Apenas Batch-Extract
 ```bash
 source .venv/bin/activate
-melhorador-textos batch-extract --input-dir _originais --output-dir _output --temp-dir _temp
+txtmelhorator batch-extract --input-dir _originais --output-dir _output --temp-dir _temp
 ```
 
 ### Apenas Check-LT
@@ -92,18 +92,18 @@ melhorador-textos batch-extract --input-dir _originais --output-dir _output --te
 source .venv/bin/activate
 bash -c 'languagetool --http --port 8081 > /tmp/lt.log 2>&1 &'
 sleep 3
-melhorador-textos check-lt --input _output/<livro>/pages-XXX-YYY/cleaned.md
+txtmelhorator check-lt --input _output/<livro>/pages-XXX-YYY/cleaned.md
 ```
 
 ### Single (arquivo + páginas específicas)
 ```bash
 source .venv/bin/activate
-melhorador-textos extract --input "_originais/<arquivo>.pdf" --pages 1-50 --name meu_livro
+txtmelhorator extract --input "_originais/<arquivo>.pdf" --pages 1-50 --name meu_livro
 ```
 
 ## Logs & Debugging
 
-- LanguageTool log: `/tmp/melhorador-languagetool.log`
+- LanguageTool log: `/tmp/txtmelhorator-languagetool.log`
 - Batch report: `_output/BATCH_REPORT.json`
 - Per-book report: `_output/<livro>/pages-XXX-YYY/report.json`
 

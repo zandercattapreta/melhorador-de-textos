@@ -1,17 +1,17 @@
 // ==============================================================================
-// SCRIPT: lt.rs (melhorador-app)
+// SCRIPT: lt.rs (txtmelhorator-app)
 // DESCRIÇÃO: LanguageTool local (URL) + Premium (keychain) — só propõe
 // CHAMADO POR: comandos Tauri check_lt_*
 // CONTRATO (RESPOSTA ESPERADA): DiffProposal[]; Premium avisa nuvem
 // ==============================================================================
 
-use melhorador_core::review::DiffProposal;
+use txtmelhorator_core::review::DiffProposal;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
 
 pub const DEFAULT_LT_URL: &str = "http://localhost:8081";
-const KEYCHAIN_SERVICE: &str = "com.zedicoes.melhorador.lt-premium";
+const KEYCHAIN_SERVICE: &str = "com.zedicoes.txtmelhorator.lt-premium";
 const KEYCHAIN_ACCOUNT: &str = "username";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-# Melhorador de Textos — Visão para integração no SADE
+# TXTMelhorator — Visão para integração no SADE
 
 Documento de referência para incorporar esta ferramenta ao ecossistema SADE (Z•Edições). Descreve o que faz, como executa e quais dependências usa. **Não usa IA em nenhuma etapa** (OCR clássico + heurísticas determinísticas + revisão humana opcional).
 
@@ -58,7 +58,7 @@ brew install python@3.12 tesseract tesseract-lang ghostscript qpdf unpaper
 ### Setup
 
 ```bash
-cd "/Users/zander/Documents/_ coding/_ melhorador de textos"
+cd "/Users/zander/Documents/_ coding/_ TXTMelhorator"
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -68,17 +68,17 @@ pip install -e ".[dev]"
 
 ```bash
 # Extrair + limpar faixa de páginas
-melhorador-textos extract \
+txtmelhorator extract \
   --input "_ originais/<arquivo>.pdf" \
   --pages 21-30 \
   --name <slug>
 
 # Pacote para revisão no LanguageTool Premium (manual)
-melhorador-textos prepare-lt \
+txtmelhorator prepare-lt \
   --input "_output/<slug>/pages-XXX-YYY/cleaned.md"
 
 # Após salvar corrected.md no editor Premium
-melhorador-textos import-lt \
+txtmelhorator import-lt \
   --original  "_output/<slug>/pages-XXX-YYY/languagetool/original.txt" \
   --corrected "_output/<slug>/pages-XXX-YYY/languagetool/corrected.md"
 ```
@@ -186,13 +186,13 @@ Saída mínima:
 }
 ```
 
-Implementação futura pode ser: subprocess da CLI atual, ou módulo Python importável (`melhorador_textos.extraction` / `cleanup`), sempre **sem** dependência de IA.
+Implementação futura pode ser: subprocess da CLI atual, ou módulo Python importável (`txtmelhorator.extraction` / `cleanup`), sempre **sem** dependência de IA.
 
 ---
 
 ## 9. Referências no repositório
 
-- Código: `src/melhorador_textos/`
+- Código: `src/txtmelhorator/`
 - Uso rápido: [`README.md`](../README.md)
 - Regras do agente: [`AGENTS.md`](../AGENTS.md)
 - Backlog local: `_docs/BACKLOG.md` (não versionado)

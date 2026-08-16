@@ -24,15 +24,15 @@ python -m pytest   # 35 testes esperados
 ## Comandos
 
 ```bash
-melhorador-textos extract \
+txtmelhorator extract \
   --input "_ originais/<arquivo>.pdf" \
   --pages 21-30 \
   --name mesopotamia
 
-melhorador-textos prepare-lt \
+txtmelhorator prepare-lt \
   --input "_output/mesopotamia/pages-021-030/cleaned.md"
 
-melhorador-textos import-lt \
+txtmelhorator import-lt \
   --original  "_output/.../languagetool/original.txt" \
   --corrected "_output/.../languagetool/corrected.md"
 ```

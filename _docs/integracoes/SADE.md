@@ -6,11 +6,11 @@ atualizado_em: 2026-08-01
 
 # SADE (visão)
 
-**Estado:** sem código de integração. O Melhorador é CLI local.
+**Estado:** sem código de integração. O TXTMelhorator é CLI local.
 
 ## Papel pretendido
 
-| Hoje (Melhorador) | Futuro (SADE) |
+| Hoje (TXTMelhorator) | Futuro (SADE) |
 |---|---|
 | PDF em `_ originais/` | asset editorial / upload |
 | `_output/` Markdown + report | ingestão em pacote de revisão |

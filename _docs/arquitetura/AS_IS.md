@@ -4,7 +4,7 @@ tipo: as-is
 atualizado_em: 2026-08-16
 ---
 
-# AS IS — Melhorador de Textos
+# AS IS — TXTMelhorator
 
 **Levantado em:** 16/Ago/2026
 **Método:** código em `_CLI/` e `_APP/`, testes, `BATCH_REPORT.json`, HANDOVER, PRD único.
@@ -38,7 +38,7 @@ Dois modos no core Rust: **paridade** (= CLI, goldens) e **aprimorado** (app). D
 
 | Peça | Papel |
 |---|---|
-| `_CLI/src/melhorador_textos/` | extração, limpeza, estrutura, metadados, batch, LT |
+| `_CLI/src/txtmelhorator/` | extração, limpeza, estrutura, metadados, batch, LT |
 | `_APP/core/` | port Rust + extração PDFium/Tesseract + montador nativo v3 |
 | `_APP/src-tauri/` | comandos Tauri (`process_pdf`, `process_text_file`, `save_result`) |
 | `_APP/src/App.tsx` | dropzone, progresso, preview, salvar |

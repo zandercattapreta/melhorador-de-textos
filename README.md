@@ -1,4 +1,4 @@
-# Melhorador de Textos
+# TXTMelhorator
 
 Ferramenta local: extrai e limpa texto de PDFs de livros digitalizados, **sem inventar conteúdo**. OCR clássico + regras + revisão humana. Sem LLM no pipeline.
 
@@ -84,7 +84,7 @@ $ bash _CLI/melhorar.sh
 ```bash
 source _CLI/.venv/bin/activate
 
-melhorador-textos batch-extract \
+txtmelhorator batch-extract \
   --input-dir _originais \
   --output-dir _output \
   --temp-dir _temp \
@@ -95,20 +95,20 @@ melhorador-textos batch-extract \
 
 ```bash
 # 1. Extrair + limpar uma faixa de páginas (gera raw.txt, cleaned.md, report.json)
-melhorador-textos extract \
+txtmelhorator extract \
   --input "_originais/<arquivo>.pdf" \
   --pages 21-30 \
   --name mesopotamia
 
 # 2. Gerar pacote de revisão do LanguageTool (original.txt + manifest.json)
-melhorador-textos prepare-lt \
+txtmelhorator prepare-lt \
   --input "_output/mesopotamia/pages-021-030/cleaned.md"
 
 # 3. (manual) Revisar no editor Premium do LanguageTool em pt-BR
 #    Salve o texto revisado como corrected.md na pasta languagetool/
 
 # 4. Importar o corrigido e gerar o diff auditável (changes.diff)
-melhorador-textos import-lt \
+txtmelhorator import-lt \
   --original   "_output/mesopotamia/pages-021-030/languagetool/original.txt" \
   --corrected  "_output/mesopotamia/pages-021-030/languagetool/corrected.md"
 ```

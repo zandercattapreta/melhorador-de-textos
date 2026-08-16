@@ -1,5 +1,5 @@
 [project]
-name = "melhorador-textos"
+name = "txtmelhorator"
 version = "0.1.0"
 description = "Extrai texto de PDFs de livros digitalizados e melhora a conversão (formatação e legibilidade), sem inventar conteúdo."
 requires-python = ">=3.12"
@@ -15,7 +15,7 @@ dev = [
 ]
 
 [project.scripts]
-melhorador-textos = "melhorador_textos.cli:main"
+txtmelhorator = "txtmelhorator.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]

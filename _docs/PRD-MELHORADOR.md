@@ -4,7 +4,7 @@ tipo: prd
 atualizado_em: 2026-08-16
 ---
 
-# PRD — Melhorador de Textos
+# PRD — TXTMelhorator
 
 **Produto:** ferramenta local que extrai texto de PDFs de livros digitalizados e melhora a conversão — formatação e legibilidade — **sem inventar conteúdo**.
 **Superfícies:** App desktop (uso diário) e CLI Python (referência + lote no Mac de desenvolvimento).

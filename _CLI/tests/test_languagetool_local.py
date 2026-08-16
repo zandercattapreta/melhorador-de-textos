@@ -2,14 +2,14 @@
 # SCRIPT: test_languagetool_local.py
 # DESCRIÇÃO: Testes unitários da revisão LT local (lógica pura, sem servidor)
 # CHAMADO POR: pytest (python -m pytest)
-# DEPENDÊNCIAS: pytest, melhorador_textos.languagetool_local
+# DEPENDÊNCIAS: pytest, txtmelhorator.languagetool_local
 # CONTRATO (RESPOSTA ESPERADA): todos os testes passam (exit 0)
 # ==============================================================================
 """Testes de apply_suggestions e reajuste de offsets por chunk."""
 
 from __future__ import annotations
 
-from melhorador_textos.languagetool_local import apply_suggestions, check_text
+from txtmelhorator.languagetool_local import apply_suggestions, check_text
 
 
 def _match(offset: int, length: int, *replacements: str) -> dict:
@@ -77,7 +77,7 @@ def test_check_text_reajusta_offsets_por_chunk(monkeypatch):
     para2 = "segundo paragrafo"
     text = f"{para1}\n\n{para2}"
 
-    import melhorador_textos.languagetool_local as ltl
+    import txtmelhorator.languagetool_local as ltl
 
     # Cada chunk = 1 parágrafo (chunk_text com size pequeno).
     monkeypatch.setattr(

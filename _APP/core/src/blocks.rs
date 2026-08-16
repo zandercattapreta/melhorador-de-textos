@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: blocks.rs (melhorador-core)
+// SCRIPT: blocks.rs (txtmelhorator-core)
 // DESCRIÇÃO: Marca blocos especiais (ficha, bibliografia, figura) — só enhanced
 // CHAMADO POR: lib.rs clean_and_structure_enhanced; testes unitários
 // CONTRATO (RESPOSTA ESPERADA): mesmo texto + comentários HTML / [figura]; zero invenção

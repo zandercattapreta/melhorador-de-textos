@@ -4,7 +4,7 @@ tipo: prd
 atualizado_em: 2026-08-01
 ---
 
-# PRD — Melhorador de Textos (arquivo · 01/Ago/2026)
+# PRD — TXTMelhorator (arquivo · 01/Ago/2026)
 
 Rotacionado em 16/Ago/2026. O PRD vigente é [`../PRD-MELHORADOR.md`](../PRD-MELHORADOR.md).
 

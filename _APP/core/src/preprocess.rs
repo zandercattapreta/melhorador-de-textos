@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: preprocess.rs (melhorador-core)
+// SCRIPT: preprocess.rs (txtmelhorator-core)
 // DESCRIÇÃO: Pré-processamento leve de imagem antes do OCR (R2 depois)
 // CHAMADO POR: extraction OCR path (opt-in)
 // CONTRATO (RESPOSTA ESPERADA): bitmap mais legível; sem inventar pixels de texto

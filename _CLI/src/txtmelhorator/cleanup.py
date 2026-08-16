@@ -1,7 +1,7 @@
 # ==============================================================================
 # SCRIPT: cleanup.py
 # DESCRIÇÃO: Limpeza determinística de texto OCR/PDF sem inventar conteúdo
-# CHAMADO POR: melhorador_textos.cli (comando extract), tests/test_cleanup.py
+# CHAMADO POR: txtmelhorator.cli (comando extract), tests/test_cleanup.py
 # DEPENDÊNCIAS: ftfy, re, unicodedata
 # CONTRATO (RESPOSTA ESPERADA): CleanupResult { text: str, stats: dict, warnings: list }
 # ==============================================================================

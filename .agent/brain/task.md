@@ -7,4 +7,5 @@ Escopo:
 2. IA local = mesma função, opt-in
 3. Ambas só propõem; aceitar na UI; salvar com trilha
 
-Fora: notarização Apple; embutir llama.cpp no binário (fica PATH/GGUF por enquanto).
+Fora: notarização Apple.
+Pendente produto: **R5c** — embutir llama.cpp no binário (sem llama-cli externo).

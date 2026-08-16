@@ -1,5 +1,5 @@
 ---
-description: End of Day — Melhorador de Textos
+description: End of Day — TXTMelhorator
 ---
 
 # Workflow: End of Day (EOD)
@@ -7,7 +7,7 @@ description: End of Day — Melhorador de Textos
 > **Uso:** ao encerrar cada sessão neste projeto.
 > **Tempo estimado:** 5–10 minutos
 
-**Caminho:** `/Users/zander/Documents/_ coding/_ melhorador de textos`
+**Caminho:** `/Users/zander/Documents/_ coding/_ TXTMelhorator`
 
 ---
 
@@ -23,7 +23,7 @@ Consultar `.agent/skills/dod/SKILL.md` e `~docs/~work_guidelines/protocols/DOD.m
 ## 2. Git — Status e Commit
 
 ```bash
-cd "/Users/zander/Documents/_ coding/_ melhorador de textos"
+cd "/Users/zander/Documents/_ coding/_ TXTMelhorator"
 git status
 ```
 
@@ -47,7 +47,7 @@ git push origin main \
 ## 3. Limpar Artefatos Temporários
 
 ```bash
-cd "/Users/zander/Documents/_ coding/_ melhorador de textos"
+cd "/Users/zander/Documents/_ coding/_ TXTMelhorator"
 rm -rf .temp/ _temp/ 2>/dev/null || true
 ```
 
@@ -56,7 +56,7 @@ rm -rf .temp/ _temp/ 2>/dev/null || true
 ## 4. Backup Local
 
 ```bash
-cd "/Users/zander/Documents/_ coding/_ melhorador de textos"
+cd "/Users/zander/Documents/_ coding/_ TXTMelhorator"
 DATE=$(date +%Y-%m-%d)
 zip -r "_bkps/melhorador-de-textos_${DATE}.zip" \
   AGENTS.md README.md .gitignore .agent/ \

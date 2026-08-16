@@ -4,7 +4,7 @@ tipo: prd
 atualizado_em: 2026-08-16
 ---
 
-# Plano de Implementação — App Desktop "Melhorador de Textos"
+# Plano de Implementação — App Desktop "TXTMelhorator"
 
 **Pivô (15/Ago/2026):** de CLI local para **aplicativo desktop** multiplataforma (macOS / Linux / Windows), reaproveitando o pipeline já desenvolvido e testado (extração, limpeza, estrutura, revisão LT).
 
@@ -53,7 +53,7 @@ Esses requisitos definem a linguagem do core. Comparativo das linguagens candida
 ┌───────────────────────── App Desktop ─────────────────────────┐
 │  UI: origem (PDF/pasta) · fila+progresso · diff · config      │
 ├───────────────────────────────────────────────────────────────┤
-│  core (pacote melhorador_textos — REUTILIZADO)                │
+│  core (pacote txtmelhorator — REUTILIZADO)                │
 │  extraction → cleanup → structure → report (determinístico)   │
 ├──────────────────────┬────────────────────┬───────────────────┤
 │ Revisão LT           │ Revisão IA (opt-in)│ Exportadores      │
@@ -157,4 +157,4 @@ Gates APAE: aprovação deste plano libera F0+F1; F2/F3/F4/F5 têm gate próprio
 2. ✅ **Requisito:** 100% compilado, sem dependências externas (Zander, 15/Ago) — **ainda não cumprido no OCR** (Tesseract via Homebrew).
 3. ✅ **Core Rust + UI TypeScript** — código no ar (16/Ago).
 4. ✅ Trabalho F0+F1 (e fatia F2) executado; o carimbo “aguardando APAE / nenhum código” está superado.
-5. ⬜ Nome do app (working title: "Melhorador de Textos").
+5. ⬜ Nome do app (working title: "TXTMelhorator").

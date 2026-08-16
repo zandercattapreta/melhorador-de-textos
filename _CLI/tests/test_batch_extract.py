@@ -2,7 +2,7 @@
 # SCRIPT: test_batch_extract.py
 # DESCRIÇÃO: Testes unitários do orquestrador batch (sem OCR real)
 # CHAMADO POR: pytest (python -m pytest)
-# DEPENDÊNCIAS: pytest, melhorador_textos.batch_extract
+# DEPENDÊNCIAS: pytest, txtmelhorator.batch_extract
 # CONTRATO (RESPOSTA ESPERADA): todos os testes passam (exit 0)
 # ==============================================================================
 """Testes de descoberta de PDFs, resolução de faixas e checkpoint."""
@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from melhorador_textos.batch_extract import (
+from txtmelhorator.batch_extract import (
     BatchReport,
     BookRecord,
     DEFAULT_SAMPLE_PAGES,

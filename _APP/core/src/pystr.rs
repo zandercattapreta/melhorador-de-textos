@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: pystr.rs (melhorador-core)
+// SCRIPT: pystr.rs (txtmelhorator-core)
 // DESCRIÇÃO: Semântica de strings do Python (strip/splitlines/isspace) em Rust
 // CHAMADO POR: cleanup.rs, structure.rs
 // CONTRATO (RESPOSTA ESPERADA): comportamento idêntico ao CPython 3.12

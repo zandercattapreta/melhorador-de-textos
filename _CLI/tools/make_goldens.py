@@ -2,7 +2,7 @@
 # SCRIPT: make_goldens.py
 # DESCRIÇÃO: Gera golden masters do pipeline Python p/ validar o port Rust
 # CHAMADO POR: desenvolvedor (PYTHONPATH=_CLI/src python _CLI/tools/make_goldens.py)
-# DEPENDÊNCIAS: melhorador_textos (cleanup, structure), ftfy
+# DEPENDÊNCIAS: txtmelhorator (cleanup, structure), ftfy
 # CONTRATO (RESPOSTA ESPERADA): _temp/goldens/<slug>/{raw.txt, clean_only.txt,
 #   cleaned_golden.md, stats.json}; exit 0 = todos gerados e consistentes
 # ==============================================================================
@@ -24,8 +24,8 @@ from pathlib import Path
 
 import ftfy
 
-from melhorador_textos.cleanup import clean_text
-from melhorador_textos.structure import apply_structure
+from txtmelhorator.cleanup import clean_text
+from txtmelhorator.structure import apply_structure
 
 _OUTPUT = Path("_output")
 _GOLDENS = Path("_temp/goldens")

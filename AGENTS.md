@@ -1,4 +1,4 @@
-# Melhorador de Textos — AGENTS.md
+# TXTMelhorator — AGENTS.md
 
 ## Overview
 
@@ -19,7 +19,7 @@ cd _CLI && python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 python -m pytest                              # 61 testes CLI (de _CLI/)
 bash _CLI/melhorar.sh                         # lote CLI (da raiz)
-melhorador-textos extract --input "_originais/<arquivo>.pdf" --pages 21-30
+txtmelhorator extract --input "_originais/<arquivo>.pdf" --pages 21-30
 cd _APP/core && cargo test --release          # core Rust + goldens (sempre --release)
 cd _APP && npm run tauri dev                  # janela do app
 ```
@@ -111,8 +111,8 @@ DoD universal: `~docs/~work_guidelines/protocols/DOD.md`.
 
 | Dado | Valor |
 |---|---|
-| Caminho do projeto | `/Users/zander/Documents/_ coding/_ melhorador de textos` |
-| Ambiente local | `_CLI/.venv` (Python 3.12) · CLI `melhorador-textos` · Rust 1.97 · Node 26 |
+| Caminho do projeto | `/Users/zander/Documents/_ coding/_ TXTMelhorator` |
+| Ambiente local | `_CLI/.venv` (Python 3.12) · CLI `txtmelhorator` · Rust 1.97 · Node 26 |
 | Código | `_CLI/` (Python, referência) · `_APP/` (Tauri 2: core Rust + UI TS) |
 | Saídas | `_output/` e `_temp/` (local-only, fora do git) |
 | Produção | N/A (ainda) |

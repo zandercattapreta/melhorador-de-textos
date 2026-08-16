@@ -1,7 +1,7 @@
 # ==============================================================================
 # SCRIPT: extraction.py
 # DESCRIÇÃO: Extrai texto de um PDF por faixa de páginas (texto nativo ou OCR)
-# CHAMADO POR: melhorador_textos.cli (comando extract)
+# CHAMADO POR: txtmelhorator.cli (comando extract)
 # DEPENDÊNCIAS: pypdf, ocrmypdf (subprocess), subprocess, shutil
 # CONTRATO (RESPOSTA ESPERADA): ExtractionResult { raw_text, engine, pages, meta }
 # ==============================================================================

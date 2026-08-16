@@ -16,7 +16,7 @@ Objetivo: mapear padrões, confiança e heurísticas de fallback.
 import pytest
 from pathlib import Path
 
-from melhorador_textos.metadata import (
+from txtmelhorator.metadata import (
     extract_pdf_metadata,
     _parse_author,
     _parse_title,

@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: rules.rs (melhorador-core)
+// SCRIPT: rules.rs (txtmelhorator-core)
 // DESCRIÇÃO: Regras que o usuário ensina (R4) — aplicadas antes de estrutura/IA
 // CHAMADO POR: lib.rs enhanced; comandos Tauri de persistência
 // CONTRATO (RESPOSTA ESPERADA): texto só com remoções/marcações; zero invenção

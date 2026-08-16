@@ -3,8 +3,8 @@
 # DESCRIÇÃO: Typos OCR + faixas não contíguas
 # ==============================================================================
 
-from melhorador_textos.extraction import parse_page_range
-from melhorador_textos.ocr_typos import apply_ocr_typos
+from txtmelhorator.extraction import parse_page_range
+from txtmelhorator.ocr_typos import apply_ocr_typos
 
 
 def test_parse_page_range_comma():

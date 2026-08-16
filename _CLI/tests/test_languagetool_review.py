@@ -2,13 +2,13 @@
 # SCRIPT: test_languagetool_review.py
 # DESCRIÇÃO: Testes do fluxo manual LanguageTool (manifesto, hash, diff)
 # CHAMADO POR: pytest
-# DEPENDÊNCIAS: pytest, melhorador_textos.languagetool_review
+# DEPENDÊNCIAS: pytest, txtmelhorator.languagetool_review
 # CONTRATO (RESPOSTA ESPERADA): asserts de manifesto, chunking e diff
 # ==============================================================================
 
 import json
 
-from melhorador_textos.languagetool_review import (
+from txtmelhorator.languagetool_review import (
     chunk_text,
     import_correction,
     prepare_package,

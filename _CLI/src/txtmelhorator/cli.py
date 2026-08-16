@@ -1,7 +1,7 @@
 # ==============================================================================
 # SCRIPT: cli.py
 # DESCRIÇÃO: CLI da PoC — extrai/limpa PDF e prepara revisão no LanguageTool
-# CHAMADO POR: entry point `melhorador-textos` (pyproject scripts), terminal
+# CHAMADO POR: entry point `txtmelhorator` (pyproject scripts), terminal
 # DEPENDÊNCIAS: argparse, json; módulos internos extraction/cleanup/languagetool_review
 # CONTRATO (RESPOSTA ESPERADA): EXIT 0 = sucesso; escreve artefatos em _output/
 # ==============================================================================
@@ -204,7 +204,7 @@ def _cmd_batch_extract(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="melhorador-textos",
+        prog="txtmelhorator",
         description="PoC: extrai texto de PDF, limpa e prepara revisão no LanguageTool.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")

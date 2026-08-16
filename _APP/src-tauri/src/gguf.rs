@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: gguf.rs (melhorador-app)
+// SCRIPT: gguf.rs (txtmelhorator-app)
 // DESCRIÇÃO: Gerenciador GGUF — CoTypist (Gemma) + modelos baixados pelo usuário
 // CHAMADO POR: comandos Tauri
 // CONTRATO: catálogo une pastas externas + app_data/models/; seleção em models.json
@@ -23,7 +23,7 @@ pub struct ModelEntry {
     pub path: String,
     pub sha256: Option<String>,
     pub bytes: u64,
-    /// "cotypist" | "app" — só "app" pode ser apagado pelo Melhorador
+    /// "cotypist" | "app" — só "app" pode ser apagado pelo TXTMelhorator
     #[serde(default = "default_source_app")]
     pub source: String,
 }
@@ -112,7 +112,7 @@ pub fn refresh_catalog(app_data: &Path) -> Result<ModelsState, String> {
     if let Some(ct) = cotypist_models_dir() {
         catalog.extend(scan_gguf_dir(&ct, "cotypist", &prev));
     }
-    // 2) Modelos baixados pelo Melhorador
+    // 2) Modelos baixados pelo TXTMelhorator
     catalog.extend(scan_gguf_dir(&dir, "app", &prev));
 
     catalog.sort_by(|a, b| {

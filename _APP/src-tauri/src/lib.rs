@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: lib.rs (melhorador-app / src-tauri)
+// SCRIPT: lib.rs (txtmelhorator-app / src-tauri)
 // DESCRIÇÃO: Comandos Tauri — pipeline, LT, GGUF, export, cancelamento
 // CHAMADO POR: UI React via invoke(); main.rs
 // CONTRATO (RESPOSTA ESPERADA): ProcessResult ou "CANCELLED" / erro legível
@@ -7,6 +7,7 @@
 
 mod cloud_ai;
 mod gguf;
+mod llama_infer;
 mod lt;
 
 use std::path::{Path, PathBuf};
@@ -56,8 +57,8 @@ fn resolve_languages(app: &AppHandle, pdf: &Path, raw: Option<String>) -> Result
         return Ok(normalized);
     }
     let pdfium = find_pdfium(app)?;
-    let sample = melhorador_core::extraction::sample_native_text(&pdfium, pdf, 5)?;
-    Ok(melhorador_core::extraction::detect_ocr_languages(&sample).to_string())
+    let sample = txtmelhorator_core::extraction::sample_native_text(&pdfium, pdf, 5)?;
+    Ok(txtmelhorator_core::extraction::detect_ocr_languages(&sample).to_string())
 }
 
 fn ensure_app_data_dirs(app: &AppHandle) -> Result<PathBuf, String> {
@@ -99,7 +100,7 @@ fn rules_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(root.join("user_rules.json"))
 }
 
-fn load_user_rules(app: &AppHandle) -> Vec<melhorador_core::rules::UserRule> {
+fn load_user_rules(app: &AppHandle) -> Vec<txtmelhorator_core::rules::UserRule> {
     let Ok(path) = rules_path(app) else {
         return Vec::new();
     };
@@ -110,14 +111,14 @@ fn load_user_rules(app: &AppHandle) -> Vec<melhorador_core::rules::UserRule> {
 }
 
 #[tauri::command]
-fn list_user_rules(app: AppHandle) -> Result<Vec<melhorador_core::rules::UserRule>, String> {
+fn list_user_rules(app: AppHandle) -> Result<Vec<txtmelhorator_core::rules::UserRule>, String> {
     Ok(load_user_rules(&app))
 }
 
 #[tauri::command]
 fn save_user_rules(
     app: AppHandle,
-    rules: Vec<melhorador_core::rules::UserRule>,
+    rules: Vec<txtmelhorator_core::rules::UserRule>,
 ) -> Result<(), String> {
     let path = rules_path(&app)?;
     let json = serde_json::to_string_pretty(&rules).map_err(|e| e.to_string())?;
@@ -218,7 +219,7 @@ fn save_cloud_ai_key(api_key: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn check_cloud_ai(app: AppHandle, text: String) -> Result<melhorador_core::review::ReviewReport, String> {
+fn check_cloud_ai(app: AppHandle, text: String) -> Result<txtmelhorator_core::review::ReviewReport, String> {
     let settings = load_cloud_ai_settings(&app);
     cloud_ai::propose_cloud_review(&text, &settings)
 }
@@ -247,13 +248,13 @@ fn ensure_lt_server(app: AppHandle) -> Result<String, String> {
 fn check_lt_local(
     app: AppHandle,
     text: String,
-) -> Result<Vec<melhorador_core::review::DiffProposal>, String> {
+) -> Result<Vec<txtmelhorator_core::review::DiffProposal>, String> {
     let url = load_lt_settings(&app).local_url;
     lt::check_local(&text, &url)
 }
 
 #[tauri::command]
-fn check_lt_premium(text: String) -> Result<Vec<melhorador_core::review::DiffProposal>, String> {
+fn check_lt_premium(text: String) -> Result<Vec<txtmelhorator_core::review::DiffProposal>, String> {
     let user = lt::load_premium_username().ok_or("Username Premium ausente no keychain")?;
     let key = lt::load_premium_api_key().ok_or("API key Premium ausente no keychain")?;
     lt::check_premium(&text, &user, &key)
@@ -318,21 +319,31 @@ fn download_gguf_model(
 }
 
 #[tauri::command]
-fn propose_review(app: AppHandle, text: String) -> Result<melhorador_core::review::ReviewReport, String> {
+fn propose_review(app: AppHandle, text: String) -> Result<txtmelhorator_core::review::ReviewReport, String> {
     let root = ensure_app_data_dirs(&app)?;
-    if let Some(model) = gguf::selected_path(&root) {
-        Ok(melhorador_core::review::propose_llama_review(&text, &model))
-    } else {
-        Ok(melhorador_core::review::propose_heuristic_review(&text))
+    let Some(model) = gguf::selected_path(&root) else {
+        return Ok(txtmelhorator_core::review::propose_heuristic_review(&text));
+    };
+    // R5c: inferência in-process (llama.cpp no binário) — sem llama-cli.
+    let vocabulary = txtmelhorator_core::review::extract_vocabulary(&text, 80);
+    let prompt = txtmelhorator_core::review::fidelity_prompt(&text, &vocabulary);
+    match llama_infer::generate(&model, &prompt, 512) {
+        Ok(raw) => Ok(txtmelhorator_core::review::merge_llm_review(&text, &raw)),
+        Err(e) => {
+            let mut base = txtmelhorator_core::review::propose_heuristic_review(&text);
+            base.engine = "ia-local-erro".into();
+            base.note = format!("{e} Por enquanto use LanguageTool.");
+            Ok(base)
+        }
     }
 }
 
 #[tauri::command]
 fn apply_review_diffs(
     text: String,
-    accepted: Vec<melhorador_core::review::DiffProposal>,
+    accepted: Vec<txtmelhorator_core::review::DiffProposal>,
 ) -> Result<String, String> {
-    melhorador_core::review::apply_accepted_diffs(&text, &accepted)
+    txtmelhorator_core::review::apply_accepted_diffs(&text, &accepted)
 }
 
 /// tessdata: app-data → resource bundle → Homebrew (via core).
@@ -388,7 +399,7 @@ fn process_text_file(app: AppHandle, path: String) -> Result<ProcessResult, Stri
     let raw = std::fs::read_to_string(p).map_err(|e| format!("Não consegui ler o arquivo: {e}"))?;
     let rules = load_user_rules(&app);
     let (structured, cleaned) =
-        melhorador_core::clean_and_structure_enhanced_with_rules(&raw, &rules);
+        txtmelhorator_core::clean_and_structure_enhanced_with_rules(&raw, &rules);
 
     Ok(ProcessResult {
         source_name: p
@@ -464,14 +475,24 @@ fn process_pdf(
     let cancel_flag = &state.cancel;
     let should_cancel = || cancel_flag.load(Ordering::SeqCst);
 
-    let mut progress = |done: usize, total: usize, page_text: &str| {
+    let mut progress = |done: usize, total: usize, page_text: &str, preview: Option<&[u8]>| {
+        let preview_url = preview.map(|bytes| {
+            use base64::Engine;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+            format!("data:image/png;base64,{b64}")
+        });
         let _ = app.emit(
             "extract-progress",
-            serde_json::json!({ "done": done, "total": total, "pageText": page_text }),
+            serde_json::json!({
+                "done": done,
+                "total": total,
+                "pageText": page_text,
+                "preview": preview_url,
+            }),
         );
     };
     let rules = load_user_rules(&app);
-    let extracted = melhorador_core::extraction::extract_pdf(
+    let extracted = txtmelhorator_core::extraction::extract_pdf(
         &pdfium,
         p,
         None,
@@ -483,7 +504,7 @@ fn process_pdf(
     )?;
 
     let pages_result =
-        melhorador_core::clean_and_structure_pages_with_rules(&extracted.raw_text, &rules);
+        txtmelhorator_core::clean_and_structure_pages_with_rules(&extracted.raw_text, &rules);
     Ok(ProcessResult {
         source_name: p
             .file_name()
@@ -508,7 +529,7 @@ fn render_pdf_page(app: AppHandle, path: String, page: u32) -> Result<String, St
         return Err("Página deve ser ≥ 1".into());
     }
     let pdfium = find_pdfium(&app)?;
-    let png = melhorador_core::extraction::render_page_png(
+    let png = txtmelhorator_core::extraction::render_page_png(
         &pdfium,
         Path::new(&path),
         page as usize,
@@ -558,7 +579,7 @@ fn save_result(
     engine: Option<String>,
     languages: Option<String>,
     page_count: Option<u32>,
-    accepted_diffs: Option<Vec<melhorador_core::review::DiffProposal>>,
+    accepted_diffs: Option<Vec<txtmelhorator_core::review::DiffProposal>>,
 ) -> Result<String, String> {
     let p = Path::new(&source_path);
     let stem = p
@@ -579,13 +600,13 @@ fn save_result(
             .to_path_buf(),
     };
 
-    let meta = melhorador_core::metadata::extract_book_meta(
+    let meta = txtmelhorator_core::metadata::extract_book_meta(
         &content.chars().take(8000).collect::<String>(),
         &stem,
     );
     let diffs = accepted_diffs.unwrap_or_default();
     let empty_stats = std::collections::BTreeMap::new();
-    let report = melhorador_core::report::build_report(
+    let report = txtmelhorator_core::report::build_report(
         &p.file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| source_path.clone()),
@@ -635,7 +656,7 @@ fn save_result(
             dest
         }
         "docx" => {
-            let bytes = melhorador_core::docx_export::markdown_to_docx(&content)?;
+            let bytes = txtmelhorator_core::docx_export::markdown_to_docx(&content)?;
             let dest = dir.join(format!("{stem}.melhorado.docx"));
             std::fs::write(&dest, bytes).map_err(|e| format!("Não consegui gravar: {e}"))?;
             dest
@@ -698,14 +719,14 @@ mod tests {
 
     #[test]
     fn processa_txt_e_salva_md() {
-        let dir = std::env::temp_dir().join("melhorador-app-test");
+        let dir = std::env::temp_dir().join("txtmelhorator-app-test");
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("amostra.txt");
         std::fs::write(&src, "Uma pala-\nvra quebrada.\n\n\n\nCAPÍTULO PRIMEIRO\n\nProsa.")
             .unwrap();
 
         let raw = std::fs::read_to_string(&src).unwrap();
-        let (structured, _cleaned) = melhorador_core::clean_and_structure_enhanced(&raw);
+        let (structured, _cleaned) = txtmelhorator_core::clean_and_structure_enhanced(&raw);
         assert!(structured.text.contains("Uma palavra quebrada."));
         assert!(structured.text.contains("# CAPÍTULO PRIMEIRO"));
 
@@ -725,7 +746,7 @@ mod tests {
 
     #[test]
     fn salva_em_destino_alternativo() {
-        let base = std::env::temp_dir().join("melhorador-app-dest");
+        let base = std::env::temp_dir().join("txtmelhorator-app-dest");
         let src_dir = base.join("origem");
         let out_dir = base.join("saida");
         std::fs::create_dir_all(&src_dir).unwrap();
@@ -750,7 +771,7 @@ mod tests {
 
     #[test]
     fn lista_pdfs_da_pasta() {
-        let dir = std::env::temp_dir().join("melhorador-app-pdfs");
+        let dir = std::env::temp_dir().join("txtmelhorator-app-pdfs");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("a.pdf"), b"%PDF").unwrap();
@@ -771,7 +792,7 @@ mod tests {
 
     #[test]
     fn limpa_conteudo_de_pasta() {
-        let dir = std::env::temp_dir().join("melhorador-clear-test");
+        let dir = std::env::temp_dir().join("txtmelhorator-clear-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("sub")).unwrap();
         std::fs::write(dir.join("a.txt"), b"x").unwrap();

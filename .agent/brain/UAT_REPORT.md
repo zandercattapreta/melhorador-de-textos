@@ -1,4 +1,4 @@
-# UAT Report — Melhorador de Textos
+# UAT Report — TXTMelhorator
 
 **Modo:** UAT — **ENCERRADO**  
 **Início:** 2026-08-16  

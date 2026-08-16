@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: cleanup.rs (melhorador-core)
+// SCRIPT: cleanup.rs (txtmelhorator-core)
 // DESCRIÇÃO: Limpeza determinística de texto OCR — port fiel de _CLI cleanup.py
 // CHAMADO POR: lib.rs; pipeline do app; tests/golden.rs
 // CONTRATO (RESPOSTA ESPERADA): mesmas saídas do cleanup.py, byte a byte

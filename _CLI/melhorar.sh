@@ -70,7 +70,7 @@ log_success "Deps Python OK"
 
 # Inicia LanguageTool local
 LT_PORT=8081
-LT_LOG="/tmp/melhorador-languagetool.log"
+LT_LOG="/tmp/txtmelhorator-languagetool.log"
 
 log_info "Iniciando LanguageTool local (porta $LT_PORT)..."
 pkill -f "languagetool --http" 2>/dev/null || true
@@ -117,7 +117,7 @@ else
     log_info "Encontrados $PDF_COUNT PDFs em _originais/"
     log_info "Executando batch-extract..."
 
-    melhorador-textos batch-extract \
+    txtmelhorator batch-extract \
         --input-dir _originais \
         --output-dir _output \
         --temp-dir _temp \
@@ -149,7 +149,7 @@ else
             book_name=$(echo "$cleaned_file" | cut -d'/' -f2)
             log_info "Revisando: $book_name"
 
-            melhorador-textos check-lt \
+            txtmelhorator check-lt \
                 --input "$cleaned_file" \
                 --server "http://localhost:$LT_PORT" || {
                 log_warn "Falha ao revisar $book_name — continuando"

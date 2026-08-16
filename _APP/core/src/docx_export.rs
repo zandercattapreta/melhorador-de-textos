@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: docx_export.rs (melhorador-core)
+// SCRIPT: docx_export.rs (txtmelhorator-core)
 // DESCRIÇÃO: Markdown simples → .docx com estilos Heading/Normal (A9)
 // CHAMADO POR: comando Tauri save_result format=docx
 // CONTRATO (RESPOSTA ESPERADA): bytes OOXML; sem inventar conteúdo

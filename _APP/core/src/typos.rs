@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: typos.rs (melhorador-core)
+// SCRIPT: typos.rs (txtmelhorator-core)
 // DESCRIÇÃO: Dicionário determinístico de typos OCR comuns (pt-BR)
 // CHAMADO POR: cleanup enhanced (opt-in); CLI futuro
 // CONTRATO (RESPOSTA ESPERADA): só substitui padrões fixos; zero invenção

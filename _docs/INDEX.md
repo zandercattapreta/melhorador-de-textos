@@ -4,7 +4,7 @@ tipo: indice
 atualizado_em: 2026-08-16
 ---
 
-# Índice — Melhorador de Textos
+# Índice — TXTMelhorator
 
 Uma ferramenta, duas superfícies: **App desktop** (`_APP/`) e **CLI** (`_CLI/`, referência). PRD único: [`PRD-MELHORADOR.md`](PRD-MELHORADOR.md).
 

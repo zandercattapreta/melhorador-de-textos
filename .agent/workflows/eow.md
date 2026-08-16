@@ -1,5 +1,5 @@
 ---
-description: End of Week — Melhorador de Textos
+description: End of Week — TXTMelhorator
 ---
 
 # Workflow: End of Week (EOW)
@@ -7,7 +7,7 @@ description: End of Week — Melhorador de Textos
 > **Uso:** fim de cada semana (sexta ou último dia útil).
 > **Tempo estimado:** 15–20 minutos
 
-**Caminho:** `/Users/zander/Documents/_ coding/_ melhorador de textos`
+**Caminho:** `/Users/zander/Documents/_ coding/_ TXTMelhorator`
 
 ---
 
@@ -32,7 +32,7 @@ Fail-fast: se serviço crítico falhar, parar e notificar — sem debug sozinho 
 ## 2. Backup Semanal (Local)
 
 ```bash
-cd "/Users/zander/Documents/_ coding/_ melhorador de textos"
+cd "/Users/zander/Documents/_ coding/_ TXTMelhorator"
 SEMANA=$(date +%Y-W%V)
 zip -r "_bkps/melhorador-de-textos_${SEMANA}.zip" \
   AGENTS.md README.md .gitignore .agent/ \
@@ -47,7 +47,7 @@ zip -r "_bkps/melhorador-de-textos_${SEMANA}.zip" \
 ## 3. Auditoria de Documentação
 
 ```bash
-cd "/Users/zander/Documents/_ coding/_ melhorador de textos"
+cd "/Users/zander/Documents/_ coding/_ TXTMelhorator"
 bash "../~scripts/docs/check-docs.sh" .
 ```
 
@@ -61,7 +61,7 @@ bash "../~scripts/docs/check-docs.sh" .
 ## 4. Git — Fechamento de Semana
 
 ```bash
-cd "/Users/zander/Documents/_ coding/_ melhorador de textos"
+cd "/Users/zander/Documents/_ coding/_ TXTMelhorator"
 git add -A && git status --short
 ```
 

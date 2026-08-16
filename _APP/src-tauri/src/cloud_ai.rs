@@ -1,15 +1,15 @@
 // ==============================================================================
-// SCRIPT: cloud_ai.rs (melhorador-app)
+// SCRIPT: cloud_ai.rs (txtmelhorator-app)
 // DESCRIÇÃO: Revisão via API OpenAI-compatível (nuvem) — só propõe diffs
 // CHAMADO POR: comando Tauri check_cloud_ai
 // CONTRATO: texto SAI da máquina; usuário confirma; keychain guarda a chave
 // ==============================================================================
 
-use melhorador_core::review::{self, DiffProposal, ReviewReport};
+use txtmelhorator_core::review::{self, DiffProposal, ReviewReport};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
-const KEYCHAIN_SERVICE: &str = "com.zedicoes.melhorador.cloud-ai";
+const KEYCHAIN_SERVICE: &str = "com.zedicoes.txtmelhorator.cloud-ai";
 const KEYCHAIN_ACCOUNT: &str = "apiKey";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

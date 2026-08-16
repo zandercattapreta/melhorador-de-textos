@@ -1,7 +1,7 @@
 # ==============================================================================
 # SCRIPT: structure.py
 # DESCRIÇÃO: Detecta títulos H1–H4 e blocos de SUMÁRIO (heurísticas, sem IA)
-# CHAMADO POR: melhorador_textos.cli (após cleanup), tests/test_structure.py
+# CHAMADO POR: txtmelhorator.cli (após cleanup), tests/test_structure.py
 # DEPENDÊNCIAS: re, unicodedata
 # CONTRATO (RESPOSTA ESPERADA): StructureResult { text: str, stats: dict }
 # ==============================================================================

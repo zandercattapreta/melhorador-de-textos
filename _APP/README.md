@@ -7,7 +7,7 @@ Aplicativo multiplataforma (macOS/Linux/Windows): UI **TypeScript/React**, core 
 ```
 src/          # UI React/TS (Vite)
 src-tauri/    # casca Tauri (Rust)
-core/         # crate melhorador-core (port Rust do pipeline — em andamento)
+core/         # crate txtmelhorator-core (port Rust do pipeline — em andamento)
 ```
 
 ## Rodar em desenvolvimento

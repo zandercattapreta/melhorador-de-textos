@@ -1,7 +1,7 @@
 # ==============================================================================
 # SCRIPT: languagetool_review.py
 # DESCRIÇÃO: Prepara revisão manual no LanguageTool Premium e importa o corrigido
-# CHAMADO POR: melhorador_textos.cli (comandos prepare-lt, import-lt)
+# CHAMADO POR: txtmelhorator.cli (comandos prepare-lt, import-lt)
 # DEPENDÊNCIAS: hashlib, json, difflib, textwrap
 # CONTRATO (RESPOSTA ESPERADA): caminhos gerados + diff unificado (str)
 # ==============================================================================
@@ -98,7 +98,7 @@ def prepare_package(cleaned_text: str, out_dir: Path) -> ReviewPackage:
             "Colar o conteúdo de original.txt (respeitar a divisão em chunks se necessário).",
             "Revisar manualmente cada sugestão; não aceitar mudanças que alterem sentido, nomes próprios ou grafia histórica.",
             "Salvar o texto revisado como corrected.md na mesma pasta.",
-            "Rodar: melhorador-textos import-lt --original original.txt --corrected corrected.md",
+            "Rodar: txtmelhorator import-lt --original original.txt --corrected corrected.md",
         ],
     }
     manifest_path.write_text(

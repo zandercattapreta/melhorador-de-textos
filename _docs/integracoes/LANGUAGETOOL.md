@@ -13,9 +13,10 @@ Revisão **híbrida** (15/Ago): camada automática no LT **local** + passada fin
 Fluxo na janela (após processar o PDF):
 
 1. **Revisar com LanguageTool** — sobe o servidor local se preciso (`brew install languagetool`), sugere correções, você marca e **Aplicar marcadas**.
-2. **Revisar com IA local (opcional)** — mesma função se houver modelo GGUF + `llama-cli`.
-3. **LanguageTool Premium (nuvem)** — aviso explícito; texto sai da máquina.
-4. **Salvar** — grava o texto e `*.report.json` com as correções aceitas.
+2. **Revisar com IA local (opt-in)** — GGUF no aparelho; inferência **dentro do app** (`llama.cpp` embutido, Metal no Mac). Sem Ollama/`llama-cli`.
+3. **IA na nuvem (opt-in)** — API no formato OpenAI (URL + modelo + chave); aviso de que o texto sai do Mac.
+4. **LanguageTool Premium (nuvem)** — aviso explícito; texto sai da máquina.
+5. **Salvar** — grava o texto e `*.report.json` com as correções aceitas.
 
 Nada entra no texto sem o humano aceitar.
 

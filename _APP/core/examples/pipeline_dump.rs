@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: pipeline_dump.rs (exemplo melhorador-core)
+// SCRIPT: pipeline_dump.rs (exemplo txtmelhorator-core)
 // DESCRIÇÃO: Extração + pipeline completo com relatório p/ QA dirigido
 // CHAMADO POR: cargo run --release --example pipeline_dump -- <pdf> [ini fim]
 // CONTRATO (RESPOSTA ESPERADA): stats + amostras no stderr; texto no stdout
@@ -18,8 +18,8 @@ fn main() {
     let pdfium = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../src-tauri/libs/lib/libpdfium.dylib");
 
-    let ex = melhorador_core::extraction::extract_pdf(
-        &pdfium, &pdf, pages, "por+eng", None, &mut |d, t, _| {
+    let ex = txtmelhorator_core::extraction::extract_pdf(
+        &pdfium, &pdf, pages, "por+eng", None, &mut |d, t, _, _| {
             if d % 25 == 0 { eprintln!("[extract] {d}/{t}") }
         },
         None,
@@ -28,7 +28,7 @@ fn main() {
     .expect("extração falhou");
     eprintln!("[pipeline] engine={} paginas={}", ex.engine, ex.page_count);
 
-    let (structured, cleaned) = melhorador_core::clean_and_structure_enhanced(&ex.raw_text);
+    let (structured, cleaned) = txtmelhorator_core::clean_and_structure_enhanced(&ex.raw_text);
     eprintln!("[pipeline] cleanup: {:?}", cleaned.stats);
     eprintln!("[pipeline] structure: {:?}", structured.stats);
 

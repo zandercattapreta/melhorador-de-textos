@@ -2,11 +2,11 @@
 # SCRIPT: test_cleanup.py
 # DESCRIÇÃO: Testes da limpeza determinística (sem inventar conteúdo)
 # CHAMADO POR: pytest
-# DEPENDÊNCIAS: pytest, melhorador_textos.cleanup
+# DEPENDÊNCIAS: pytest, txtmelhorator.cleanup
 # CONTRATO (RESPOSTA ESPERADA): asserts de normalização e preservação
 # ==============================================================================
 
-from melhorador_textos.cleanup import clean_text
+from txtmelhorator.cleanup import clean_text
 
 
 def test_remove_invisible_chars():

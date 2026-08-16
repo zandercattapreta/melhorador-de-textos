@@ -1,5 +1,5 @@
 ---
-description: Start of Day — Melhorador de Textos
+description: Start of Day — TXTMelhorator
 ---
 
 # Workflow: Start of Day (SOD)
@@ -7,14 +7,14 @@ description: Start of Day — Melhorador de Textos
 > **Uso:** início de cada sessão neste projeto.
 > **Tempo estimado:** 5–10 minutos
 
-**Caminho:** `/Users/zander/Documents/_ coding/_ melhorador de textos`
+**Caminho:** `/Users/zander/Documents/_ coding/_ TXTMelhorator`
 
 ---
 
 ## 1. Verificar Estado do Git
 
 ```bash
-cd "/Users/zander/Documents/_ coding/_ melhorador de textos"
+cd "/Users/zander/Documents/_ coding/_ TXTMelhorator"
 git status
 git log --oneline -5
 ```

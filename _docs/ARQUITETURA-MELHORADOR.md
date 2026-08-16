@@ -4,7 +4,7 @@ tipo: arquitetura
 atualizado_em: 2026-08-16
 ---
 
-# Arquitetura — Melhorador de Textos
+# Arquitetura — TXTMelhorator
 
 Sistemas, módulos, dependências e fluxo de dados. Referências: [`PRD-MELHORADOR.md`](PRD-MELHORADOR.md) (§5 rotina) · [`BACKLOG-MELHORADOR.md`](BACKLOG-MELHORADOR.md) (R1–R5) · estado em [`arquitetura/AS_IS.md`](arquitetura/AS_IS.md).
 
@@ -111,7 +111,7 @@ Modos: **paridade** (= CLI / goldens) · **aprimorado** (janela).
 
 ## 3. CLI — lote e referência
 
-Pacote Python (`pip install -e .`), console script `melhorador-textos`. Entrada: `_CLI/melhorar.sh` → `batch-extract` (padrão amostra 1–50; `--full` = livro inteiro).
+Pacote Python (`pip install -e .`), console script `txtmelhorator`. Entrada: `_CLI/melhorar.sh` → `batch-extract` (padrão amostra 1–50; `--full` = livro inteiro).
 
 ```
 PDF (_originais/)
@@ -121,7 +121,7 @@ PDF (_originais/)
   → check-lt (LT local) e/ou prepare-lt / import-lt (Premium manual)
 ```
 
-### 3.1 Módulos (`_CLI/src/melhorador_textos/`)
+### 3.1 Módulos (`_CLI/src/txtmelhorator/`)
 
 | Módulo | Responsabilidade |
 |---|---|

@@ -1,4 +1,4 @@
-# Backlog — Melhorador de Textos
+# Backlog — TXTMelhorator
 
 ## Em Progresso
 - (nenhum)

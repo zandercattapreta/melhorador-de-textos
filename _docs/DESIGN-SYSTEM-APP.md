@@ -4,10 +4,12 @@ tipo: arquitetura
 atualizado_em: 2026-08-15
 ---
 
-# Design System + Interface — App Melhorador de Textos
+# DS Melhorator — App TXTMelhorator
 
-DS do aplicativo desktop (Tauri 2 + React/TypeScript). Complementa o [`PLANO-APP-MELHORADOR.md`](PLANO-APP-MELHORADOR.md).
+DS Melhorator: design system do aplicativo desktop (Tauri 2 + React/TypeScript). Complementa o [`PLANO-APP-MELHORADOR.md`](PLANO-APP-MELHORADOR.md).
 Personalidade: **ferramenta editorial** — sóbria, densa em informação, tipografia em primeiro plano, zero enfeite. O texto do livro é o protagonista; a UI é moldura.
+
+> Nota 16/Ago: proposta “Z Tinta” (Claude) **rejeitada**. SSOT visual = este documento (DS Melhorator).
 
 ---
 
@@ -78,7 +80,7 @@ Funcional e curto: 120–180 ms, ease-out. Barra de progresso e spinner são os 
 ### T1 — Biblioteca / Fila (home)
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ ⬒ Melhorador de Textos                    [Config ⚙] [ + ]   │
+│ ⬒ TXTMelhorator                    [Config ⚙] [ + ]   │
 ├──────────────────────────────────────────────────────────────┤
 │  ┌───────────── arraste PDFs ou uma pasta aqui ────────────┐ │
 │  │                  ⭳  ou clique para escolher             │ │

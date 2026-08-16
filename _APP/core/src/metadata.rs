@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: metadata.rs (melhorador-core)
+// SCRIPT: metadata.rs (txtmelhorator-core)
 // DESCRIÇÃO: Ficha catalográfica → autor/título/ISBN/slug (port do CLI)
 // CHAMADO POR: app ao salvar; testes
 // CONTRATO (RESPOSTA ESPERADA): BookMeta com slug estável; fallback = filename

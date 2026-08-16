@@ -8,7 +8,7 @@ atualizado_em: 2026-08-01
 
 | Termo | Significa | Prova |
 |---|---|---|
-| **Melhorador** | este CLI / pacote `melhorador-textos` | `pyproject.toml` |
+| **TXTMelhorator** | este CLI / pacote `txtmelhorator` | `pyproject.toml` |
 | **extract** | comando: PDF → raw + cleaned + report | `cli.py` |
 | **engine** | `native` ou `ocr` na extração | `report.json` → `engine` |
 | **cleaned.md** | texto limpo + estrutura Markdown | `_output/.../cleaned.md` |

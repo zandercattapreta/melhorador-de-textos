@@ -1,5 +1,5 @@
 // ==============================================================================
-// SCRIPT: structure.rs (melhorador-core)
+// SCRIPT: structure.rs (txtmelhorator-core)
 // DESCRIÇÃO: Headings H1–H4 e SUMÁRIO — port fiel de _CLI structure.py
 // CHAMADO POR: lib.rs; pipeline do app; tests/golden.rs
 // CONTRATO (RESPOSTA ESPERADA): mesmas saídas do structure.py, byte a byte

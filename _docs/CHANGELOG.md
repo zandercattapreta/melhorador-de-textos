@@ -4,7 +4,7 @@ tipo: sessao
 atualizado_em: 2026-08-16
 ---
 
-# Changelog — Melhorador de Textos
+# Changelog — TXTMelhorator
 
 Histórico detalhado anterior ao reset: `_historico/2026-08-01_pre-reset/CHANGELOG.md`.
 
