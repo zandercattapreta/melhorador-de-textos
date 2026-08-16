@@ -52,7 +52,7 @@ bash "../~scripts/docs/check-docs.sh" .
 ```
 
 **Revisão:**
-- [ ] `_docs/BACKLOG.md` reflete o estado real?
+- [ ] `_docs/BACKLOG-MELHORADOR.md` reflete o estado real?
 - [ ] `_docs/CHANGELOG.md` cobre a semana?
 - [ ] `python -m pytest` verde se houve mudança de código?
 

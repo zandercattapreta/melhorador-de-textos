@@ -22,6 +22,8 @@ fn main() {
         &pdfium, &pdf, pages, "por+eng", None, &mut |d, t, _| {
             if d % 25 == 0 { eprintln!("[extract] {d}/{t}") }
         },
+        None,
+        &[],
     )
     .expect("extração falhou");
     eprintln!("[pipeline] engine={} paginas={}", ex.engine, ex.page_count);

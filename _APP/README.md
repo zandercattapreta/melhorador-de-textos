@@ -21,6 +21,6 @@ npm run tauri dev
 
 - Plano: [`../_docs/PLANO-APP-MELHORADOR.md`](../_docs/PLANO-APP-MELHORADOR.md)
 - Design System (SSOT visual): [`../_docs/DESIGN-SYSTEM-APP.md`](../_docs/DESIGN-SYSTEM-APP.md)
-- Backlog (épicos E0–E6): [`../_docs/BACKLOG-MELHORADOR.md`](../_docs/BACKLOG-MELHORADOR.md)
+- Backlog (fila R1–R5): [`../_docs/BACKLOG-MELHORADOR.md`](../_docs/BACKLOG-MELHORADOR.md)
 
 O CLI Python em [`../_CLI/`](../_CLI/) é a implementação de referência: o core Rust deve reproduzir suas saídas byte a byte (golden masters). Scaffold original do create-tauri-app: `README-tauri.md`.

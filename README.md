@@ -151,7 +151,7 @@ _output/<doc>/pages-XXX-YYY/
 | `INDEX.md` | Mapa do projeto |
 | `PRD-MELHORADOR.md` | PRD único (App + CLI) |
 | `arquitetura/AS_IS.md` | Estado real (61 testes, 4 PDFs validados, metadados) |
-| `BACKLOG.md` | P0–P2 (docs versionadas, remoto, API LanguageTool) |
+| `BACKLOG-MELHORADOR.md` | Fila R1→R5 (app) |
 | `integracoes/LANGUAGETOOL.md` | Fluxo manual + batch + chunking automático |
 
 **Regra de Ouro:** extração/OCR/limpeza **sem** LLM. Revisão IA local só se opt-in (ver `AGENTS.md`).

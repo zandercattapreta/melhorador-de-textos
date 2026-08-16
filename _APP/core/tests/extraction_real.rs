@@ -37,6 +37,8 @@ fn ocr_reconhece_paginas_do_livro_real() {
             assert!(done <= total);
             assert!(!page_text.is_empty(), "texto parcial da página deve vir no callback");
         },
+        None,
+        &[],
     )
     .expect("extração falhou");
 

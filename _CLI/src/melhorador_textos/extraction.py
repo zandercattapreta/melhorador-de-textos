@@ -38,21 +38,36 @@ class ExtractionResult:
 
 
 def parse_page_range(spec: str) -> list[int]:
-    """Converte "21-30" ou "5" em lista de páginas 1-indexadas.
+    """Converte faixas em lista 1-indexada.
 
-    Aceita apenas uma faixa contígua ou página única nesta PoC.
+    Aceita: "5", "21-30", "1-10,50-60" (vírgulas = união, ordenada, sem duplicar).
     """
-    spec = spec.strip()
-    if "-" in spec:
-        start_s, end_s = spec.split("-", 1)
-        start, end = int(start_s), int(end_s)
-        if start < 1 or end < start:
-            raise ValueError(f"Faixa de páginas inválida: {spec!r}")
-        return list(range(start, end + 1))
-    page = int(spec)
-    if page < 1:
-        raise ValueError(f"Página inválida: {spec!r}")
-    return [page]
+    pages: list[int] = []
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start_s, end_s = part.split("-", 1)
+            start, end = int(start_s), int(end_s)
+            if start < 1 or end < start:
+                raise ValueError(f"Faixa de páginas inválida: {part!r}")
+            pages.extend(range(start, end + 1))
+        else:
+            page = int(part)
+            if page < 1:
+                raise ValueError(f"Página inválida: {part!r}")
+            pages.append(page)
+    # Únicos preservando ordem
+    seen: set[int] = set()
+    out: list[int] = []
+    for p in pages:
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
+    if not out:
+        raise ValueError(f"Faixa de páginas vazia: {spec!r}")
+    return out
 
 
 def _subset_pdf(input_pdf: Path, pages: list[int], dest: Path) -> None:

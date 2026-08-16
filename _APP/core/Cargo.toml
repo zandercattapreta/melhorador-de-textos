@@ -23,3 +23,8 @@ pdfium-render = { version = "0.8", features = ["image"] }
 leptess = "0.14"
 # Conversão de bitmap para PNG em memória (entrada do Tesseract).
 image = "0.25"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+docx-rs = "0.4"

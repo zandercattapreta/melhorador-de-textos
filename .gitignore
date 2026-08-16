@@ -25,12 +25,13 @@ _bkps/
 _resources/
 _originais/
 _ originais/
-_docs/
 _tests/
 _temp/
 _output/
 *.zip
 *.pdf
+_APP/src-tauri/tessdata/*.traineddata
+
 
 # OS
 .DS_Store

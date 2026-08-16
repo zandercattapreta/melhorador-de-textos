@@ -51,7 +51,7 @@ Ler na ordem:
 1. `AGENTS.md`
 2. `.agent/skills/golden-rules/SKILL.md`
 3. `_docs/INDEX.md`
-4. `_docs/BACKLOG.md` (primeiras ~60 linhas)
+4. `_docs/BACKLOG-MELHORADOR.md` (fila R1–R5)
 5. `_docs/CHANGELOG.md` (opcional, topo)
 
 **Confirmar:**

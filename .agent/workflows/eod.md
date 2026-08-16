@@ -71,7 +71,7 @@ zip -r "_bkps/melhorador-de-textos_${DATE}.zip" \
 
 ## 5. Atualizar Backlog
 
-- [ ] `_docs/BACKLOG.md` — marcar concluídos; adicionar itens novos.
+- [ ] `_docs/BACKLOG-MELHORADOR.md` — marcar concluídos; adicionar itens novos.
 
 ---
 

@@ -25,6 +25,8 @@ fn main() {
         "por+eng",
         None,
         &mut |done, total, _| eprintln!("[ocr] {done}/{total}"),
+        None,
+        &[],
     )
     .expect("extração falhou");
 
