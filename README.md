@@ -154,7 +154,7 @@ _output/<doc>/pages-XXX-YYY/
 | `BACKLOG.md` | P0–P2 (docs versionadas, remoto, API LanguageTool) |
 | `integracoes/LANGUAGETOOL.md` | Fluxo manual + batch + chunking automático |
 
-**Regra de Ouro:** sem IA/LLM em nenhuma etapa.
+**Regra de Ouro:** extração/OCR/limpeza **sem** LLM. Revisão IA local só se opt-in (ver `AGENTS.md`).
 - ✅ OCR: Tesseract clássico (`por+eng`)
 - ✅ Limpeza: heurísticas determinísticas (ftfy, hifenização, headers)
 - ✅ Estrutura: regras simples (H1–H4 por padrão texto, não ML)
