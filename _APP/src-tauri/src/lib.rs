@@ -10,15 +10,6 @@ mod gguf;
 mod llama_infer;
 mod lt;
 
-/// Experimento/bench: uma geração GGUF com timing externo.
-pub fn llama_infer_bench(
-    path: &std::path::Path,
-    prompt: &str,
-    max_tokens: i32,
-) -> Result<String, String> {
-    llama_infer::generate(path, prompt, max_tokens)
-}
-
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -173,28 +164,20 @@ fn load_cloud_ai_settings(app: &AppHandle) -> cloud_ai::CloudAiSettings {
     let Ok(path) = settings_path(app) else {
         return cloud_ai::CloudAiSettings::default();
     };
-    // settings.json pode ter lt + cloud; lemos objeto amplo
+    // settings.json guarda lt + cloud juntos; daqui só interessa o cloud_ai
+    // (campos do LT são ignorados pelo flatten).
     #[derive(serde::Deserialize, Default)]
     struct AllSettings {
-        #[serde(default)]
-        local_url: Option<String>,
-        #[serde(default)]
-        premium_enabled: Option<bool>,
         #[serde(default)]
         cloud_ai: Option<cloud_ai::CloudAiSettings>,
         #[serde(flatten)]
         _rest: std::collections::HashMap<String, serde_json::Value>,
     }
-    let raw = std::fs::read_to_string(path).ok();
-    if let Some(raw) = raw {
+    if let Some(raw) = std::fs::read_to_string(path).ok() {
         if let Ok(all) = serde_json::from_str::<AllSettings>(&raw) {
             if let Some(c) = all.cloud_ai {
                 return c;
             }
-        }
-        // legado: só LtSettings
-        if let Ok(lt) = serde_json::from_str::<lt::LtSettings>(&raw) {
-            let _ = lt;
         }
     }
     cloud_ai::CloudAiSettings::default()
@@ -227,10 +210,16 @@ fn save_cloud_ai_key(api_key: String) -> Result<(), String> {
     cloud_ai::save_api_key(&api_key)
 }
 
+/// Async: chamada HTTP bloqueante sai da main thread (U1c — sem freeze).
 #[tauri::command]
-fn check_cloud_ai(app: AppHandle, text: String) -> Result<txtmelhorator_core::review::ReviewReport, String> {
+async fn check_cloud_ai(
+    app: AppHandle,
+    text: String,
+) -> Result<txtmelhorator_core::review::ReviewReport, String> {
     let settings = load_cloud_ai_settings(&app);
-    cloud_ai::propose_cloud_review(&text, &settings)
+    tauri::async_runtime::spawn_blocking(move || cloud_ai::propose_cloud_review(&text, &settings))
+        .await
+        .map_err(|e| format!("Revisão na nuvem não concluiu: {e}"))?
 }
 
 #[tauri::command]
@@ -246,27 +235,42 @@ fn save_lt_settings(app: AppHandle, settings: lt::LtSettings) -> Result<(), Stri
     std::fs::write(path, json).map_err(|e| format!("settings: {e}"))
 }
 
+/// Async: espera pelo servidor LT fora da main thread (U1c — sem freeze).
 #[tauri::command]
-fn ensure_lt_server(app: AppHandle) -> Result<String, String> {
+async fn ensure_lt_server(app: AppHandle) -> Result<String, String> {
     let url = load_lt_settings(&app).local_url;
-    lt::ensure_server(&url)?;
-    Ok(format!("LanguageTool pronto em {url}"))
+    tauri::async_runtime::spawn_blocking(move || {
+        lt::ensure_server(&url)?;
+        Ok(format!("LanguageTool pronto em {url}"))
+    })
+    .await
+    .map_err(|e| format!("LanguageTool não iniciou: {e}"))?
 }
 
+/// Async: HTTP bloqueante do LT local fora da main thread (revisão ao vivo).
 #[tauri::command]
-fn check_lt_local(
+async fn check_lt_local(
     app: AppHandle,
     text: String,
 ) -> Result<Vec<txtmelhorator_core::review::DiffProposal>, String> {
     let url = load_lt_settings(&app).local_url;
-    lt::check_local(&text, &url)
+    tauri::async_runtime::spawn_blocking(move || lt::check_local(&text, &url))
+        .await
+        .map_err(|e| format!("LanguageTool não concluiu: {e}"))?
 }
 
+/// Async: HTTP do LT Premium (nuvem) fora da main thread.
 #[tauri::command]
-fn check_lt_premium(text: String) -> Result<Vec<txtmelhorator_core::review::DiffProposal>, String> {
-    let user = lt::load_premium_username().ok_or("Username Premium ausente no keychain")?;
-    let key = lt::load_premium_api_key().ok_or("API key Premium ausente no keychain")?;
-    lt::check_premium(&text, &user, &key)
+async fn check_lt_premium(
+    text: String,
+) -> Result<Vec<txtmelhorator_core::review::DiffProposal>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let user = lt::load_premium_username().ok_or("Username Premium ausente no keychain")?;
+        let key = lt::load_premium_api_key().ok_or("API key Premium ausente no keychain")?;
+        lt::check_premium(&text, &user, &key)
+    })
+    .await
+    .map_err(|e| format!("LanguageTool Premium não concluiu: {e}"))?
 }
 
 #[tauri::command]
@@ -327,32 +331,63 @@ fn download_gguf_model(
     gguf::download_model(&root, &url, &filename, sha256.as_deref())
 }
 
+/// U1c: async (fora da main thread — sem rainbow wheel) + modelo RESIDENTE
+/// (carrega o GGUF 1×, não 1× por página). A fila é o Mutex do LlamaState:
+/// uma inferência por vez; o OCR segue em paralelo sem esperar.
 #[tauri::command]
-fn propose_review(app: AppHandle, text: String) -> Result<txtmelhorator_core::review::ReviewReport, String> {
+async fn propose_review(
+    app: AppHandle,
+    llama: State<'_, llama_infer::LlamaState>,
+    text: String,
+) -> Result<txtmelhorator_core::review::ReviewReport, String> {
     let root = ensure_app_data_dirs(&app)?;
     let Some(model) = gguf::selected_path(&root) else {
         return Ok(txtmelhorator_core::review::propose_heuristic_review(&text));
     };
+    let llama = llama.inner().clone();
+    let app_bg = app.clone();
     // R5c: inferência in-process (llama.cpp no binário) — sem llama-cli.
-    let vocabulary = txtmelhorator_core::review::extract_vocabulary(&text, 80);
-    let prompt = txtmelhorator_core::review::fidelity_prompt(&text, &vocabulary);
-    match llama_infer::generate(&model, &prompt, 512) {
-        Ok(raw) => Ok(txtmelhorator_core::review::merge_llm_review(&text, &raw)),
-        Err(e) => {
-            let mut base = txtmelhorator_core::review::propose_heuristic_review(&text);
-            base.engine = "ia-local-erro".into();
-            base.note = format!("{e} Por enquanto use LanguageTool.");
-            Ok(base)
+    tauri::async_runtime::spawn_blocking(move || {
+        let vocabulary = txtmelhorator_core::review::extract_vocabulary(&text, 80);
+        let prompt = txtmelhorator_core::review::fidelity_prompt(&text, &vocabulary);
+        // "Parar" da UI (request_cancel) também interrompe a fila de revisão.
+        let cancelled = move || app_bg.state::<AppState>().cancel.load(Ordering::SeqCst);
+        match llama.generate(&model, &prompt, 512, Some(&cancelled)) {
+            Ok(raw) => Ok(txtmelhorator_core::review::merge_llm_review(&text, &raw)),
+            Err(e) => {
+                let mut base = txtmelhorator_core::review::propose_heuristic_review(&text);
+                if e == llama_infer::CANCELLED {
+                    base.engine = "ia-local-cancelada".into();
+                    base.note = e;
+                } else {
+                    base.engine = "ia-local-erro".into();
+                    base.note = format!("{e} Por enquanto use LanguageTool.");
+                }
+                Ok(base)
+            }
         }
-    }
+    })
+    .await
+    .map_err(|e| format!("Tarefa de IA não concluiu: {e}"))?
 }
 
-/// Só heurística (hífens, espaços) — rápida, para revisão ao vivo durante o OCR.
+/// R5d: descarrega o GGUF residente (a UI chama ao terminar a fila de livros).
 #[tauri::command]
-fn propose_heuristic_review(
-    text: String,
-) -> Result<txtmelhorator_core::review::ReviewReport, String> {
-    Ok(txtmelhorator_core::review::propose_heuristic_review(&text))
+async fn unload_llama_model(llama: State<'_, llama_infer::LlamaState>) -> Result<bool, String> {
+    let llama = llama.inner().clone();
+    // spawn_blocking: liberar 6 GiB pode demorar; não segurar a main thread.
+    tauri::async_runtime::spawn_blocking(move || llama.unload())
+        .await
+        .map_err(|e| format!("Não descarreguei o modelo: {e}"))
+}
+
+/// Melhorize de UMA página (limpeza + estrutura + regras, SEM IA) — a caixa
+/// ao vivo mostra o texto já melhorado assim que a página sai da captura.
+/// `command(async)`: roda fora da main thread (milissegundos, mas não trava).
+#[tauri::command(async)]
+fn melhorize_page(app: AppHandle, text: String) -> Result<String, String> {
+    let rules = load_user_rules(&app);
+    Ok(txtmelhorator_core::melhorize_page_with_rules(&text, &rules))
 }
 
 #[tauri::command]
@@ -361,13 +396,6 @@ fn apply_review_diffs(
     accepted: Vec<txtmelhorator_core::review::DiffProposal>,
 ) -> Result<String, String> {
     txtmelhorator_core::review::apply_accepted_diffs(&text, &accepted)
-}
-
-/// Des-hifenização determinística (fim de linha) — usada na revisão ao vivo.
-#[tauri::command]
-fn dehyphenate_text(text: String) -> Result<(String, u32), String> {
-    let (out, n) = txtmelhorator_core::review::apply_dehyphenate(&text);
-    Ok((out, n as u32))
 }
 
 /// tessdata: app-data → resource bundle → Homebrew (via core).
@@ -699,6 +727,8 @@ pub fn run() {
         .manage(AppState {
             cancel: AtomicBool::new(false),
         })
+        // U1c: motor de IA residente (GGUF carregado 1×, fila de inferência).
+        .manage(llama_infer::LlamaState::new())
         .setup(|app| {
             let _ = ensure_app_data_dirs(app.handle());
             Ok(())
@@ -714,9 +744,9 @@ pub fn run() {
             list_user_rules,
             save_user_rules,
             propose_review,
-            propose_heuristic_review,
+            unload_llama_model,
+            melhorize_page,
             apply_review_diffs,
-            dehyphenate_text,
             get_lt_settings,
             save_lt_settings,
             ensure_lt_server,

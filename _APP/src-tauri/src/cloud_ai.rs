@@ -5,7 +5,7 @@
 // CONTRATO: texto SAI da máquina; usuário confirma; keychain guarda a chave
 // ==============================================================================
 
-use txtmelhorator_core::review::{self, DiffProposal, ReviewReport};
+use txtmelhorator_core::review::{self, ReviewReport};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 

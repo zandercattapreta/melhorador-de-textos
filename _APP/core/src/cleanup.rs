@@ -19,7 +19,7 @@ use unicode_normalization::char::is_combining_mark;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::pydifflib;
-use crate::pystr::{py_rstrip, py_split_ws, py_splitlines, py_strip};
+use crate::pystr::{py_rstrip, py_splitlines, py_strip};
 
 /// Caracteres invisíveis/indesejados comuns em extração de PDF e OCR.
 /// Mesmo conjunto do Python (_INVISIBLE_CHARS).
@@ -63,18 +63,6 @@ fn line_hyphen_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     // Fim de linha (\n ou \r\n): "pala-\nvra" → "palavra"
     RE.get_or_init(|| Regex::new(r"([A-Za-zÀ-ÿ]+)-\r?\n([a-zà-ÿ])").unwrap())
-}
-
-fn embedded_numbered_re() -> &'static FancyRegex {
-    static RE: OnceLock<FancyRegex> = OnceLock::new();
-    RE.get_or_init(|| {
-        FancyRegex::new(r"(?<=[.!?»])\s+(?=\d{1,2}\.\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])").unwrap()
-    })
-}
-
-fn isolated_bar_re() -> &'static FancyRegex {
-    static RE: OnceLock<FancyRegex> = OnceLock::new();
-    RE.get_or_init(|| FancyRegex::new(r"(?<!\S)\|(?!\S)").unwrap())
 }
 
 fn ocr_garbage_line_re() -> &'static Regex {

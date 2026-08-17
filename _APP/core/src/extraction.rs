@@ -305,8 +305,13 @@ pub fn extract_pdf(
         // inferimos fronteiras de parágrafo antes do pipeline.
         let page_text = infer_paragraph_breaks(&body);
         let page_out = crate::blocks::figure_placeholder_if_empty(&page_text);
-        // Acompanha contador na UI; preview só no OCR (evita abrir o PDF de novo).
-        progress(p, end, "", None);
+        // UMA emissão por página, sempre com o texto final: página nativa com
+        // conteúdo sai aqui; página muda sai depois, na passada de OCR.
+        // (Antes emitia "" para todas — a UI recebia página vazia e o mesmo
+        // número chegava duas vezes.)
+        if !page_needs_ocr_fill(&page_out) {
+            progress(p, end, &page_out, None);
+        }
         native_parts.push(page_out);
     }
     if !carry.is_empty() {
@@ -411,6 +416,81 @@ fn page_needs_ocr_fill(text: &str) -> bool {
     t.is_empty() || t == "[figura]" || crate::blocks::is_near_empty_page(t)
 }
 
+/// Termina em pontuação que fecha sentença/bloco (fim legítimo de parágrafo).
+fn ends_sentence_like(line: &str) -> bool {
+    matches!(
+        line.trim_end().chars().last(),
+        Some('.' | '!' | '?' | ':' | ';' | '»' | '”' | '"' | '…' | ')' | ']')
+    )
+}
+
+/// Limpa artefatos recorrentes do Tesseract neste acervo (evidência 16/Ago,
+/// Schopenhauer I, págs. 6-12):
+/// 1. Barras "|" órfãs nas bordas das linhas (sombra da margem escaneada).
+/// 2. Linha em branco entre TODAS as linhas quando a entrelinha é larga —
+///    cada linha virava "parágrafo" e o reflow não juntava nada.
+/// 3. Palavra hifenizada separada por linha em branco ("le-" ⏎⏎ "va").
+/// Determinístico: só remove ruído e quebras; nunca altera palavras.
+fn normalize_ocr_page_text(text: &str) -> String {
+    // Passo 1: por linha, tira espaço à direita e barras órfãs nas pontas.
+    let mut lines: Vec<String> = Vec::new();
+    for raw in text.lines() {
+        let mut l = raw.trim_end().to_string();
+        loop {
+            let t = l.trim_end().to_string();
+            if let Some(stripped) = t.strip_suffix('|') {
+                l = stripped.trim_end().to_string();
+            } else {
+                l = t;
+                break;
+            }
+        }
+        // Barra órfã no início ("| texto" / "|texto" não; só barra isolada).
+        if let Some(stripped) = l.strip_prefix("| ") {
+            l = stripped.to_string();
+        } else if l == "|" {
+            l.clear();
+        }
+        lines.push(l);
+    }
+
+    // Passo 2: remove linha em branco espúria — a linha anterior não fecha
+    // sentença (ou termina em hífen) E a seguinte começa com minúscula.
+    let mut out: Vec<String> = Vec::new();
+    for line in lines {
+        if line.trim().is_empty() {
+            // colapsa brancos consecutivos
+            if out.last().map(|l: &String| l.is_empty()).unwrap_or(true) {
+                continue;
+            }
+            out.push(String::new());
+            continue;
+        }
+        let starts_lower = line
+            .trim_start()
+            .chars()
+            .next()
+            .map(|c| c.is_lowercase() && c.is_alphabetic())
+            .unwrap_or(false);
+        if starts_lower && out.last().map(|l| l.is_empty()).unwrap_or(false) {
+            if let Some(prev) = out.iter().rev().find(|l| !l.is_empty()) {
+                let hyphen_break = prev.ends_with('-');
+                if hyphen_break || !ends_sentence_like(prev) {
+                    // some a linha em branco: "le-"⏎"va" fica adjacente e o
+                    // dehyphenate/reflow do cleanup junta como sempre juntou.
+                    out.pop();
+                }
+            }
+        }
+        out.push(line);
+    }
+    // Sem branco pendurado no fim.
+    while out.last().map(|l| l.is_empty()).unwrap_or(false) {
+        out.pop();
+    }
+    out.join("\n")
+}
+
 fn ocr_one_page(
     document: &PdfDocument<'_>,
     ocr: &mut LepTess,
@@ -441,7 +521,7 @@ fn ocr_one_page(
     let text = ocr
         .get_utf8_text()
         .map_err(|e| format!("OCR da página {page_num} falhou: {e}"))?;
-    Ok((text, preview))
+    Ok((normalize_ocr_page_text(&text), preview))
 }
 
 /// PNG leve da página para a coluna Original durante o OCR.
@@ -496,18 +576,6 @@ impl StreamLine {
     fn height(&self) -> f32 {
         (self.top - self.bottom).abs().max(1.0)
     }
-}
-
-/// Fragmento de texto com posição (coordenadas PDF: origem no rodapé).
-/// Em muitos PDFs os segmentos vêm POR GLIFO — a remontagem precisa
-/// reconstituir palavras (espaço só quando há vão horizontal real).
-struct Frag {
-    text: String,
-    left: f32,
-    right: f32,
-    center_y: f32,
-    top: f32,
-    height: f32,
 }
 
 /// Remonta a página. Ordem do fluxo de caracteres (igual ao CLI) + coordenadas
@@ -696,131 +764,6 @@ fn finalize_assembled(
         footnotes: notes.join("\n"),
         pending_carry,
     }
-}
-
-/// (Mantida para referência do caminho por segmentos; não usada no fluxo
-/// principal — a remontagem oficial é assemble_native_page.)
-#[allow(dead_code)]
-fn assemble_native_page_by_segments(page: &PdfPage, text_page: &PdfPageText) -> AssembledPage {
-    let page_h = page.height().value;
-    if page_h <= 0.0 {
-        return AssembledPage::default();
-    }
-
-    let mut frags: Vec<Frag> = Vec::new();
-    for segment in text_page.segments().iter() {
-        let text = segment.text();
-        let trimmed = text.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let b = segment.bounds();
-        let (top, bottom) = (b.top().value, b.bottom().value);
-        let (left, right) = (b.left().value, b.right().value);
-        // 1. Margens: só descarta trecho CURTO (corpo nunca é descartado).
-        let in_top_band = bottom / page_h > 0.93;
-        let in_bottom_band = top / page_h < 0.07;
-        if (in_top_band || in_bottom_band) && trimmed.chars().count() <= 80 {
-            continue;
-        }
-        frags.push(Frag {
-            text: trimmed.to_string(),
-            left,
-            right,
-            center_y: (top + bottom) / 2.0,
-            top,
-            height: (top - bottom).abs().max(1.0),
-        });
-    }
-    if frags.is_empty() {
-        return AssembledPage::default();
-    }
-
-    // Mediana das alturas (proxy determinístico do corpo da fonte).
-    let mut heights: Vec<f32> = frags.iter().map(|f| f.height).collect();
-    heights.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let median_h = heights[heights.len() / 2];
-
-    // 2. Notas de rodapé: fonte menor + metade inferior da página.
-    let (foot, body): (Vec<Frag>, Vec<Frag>) = frags
-        .into_iter()
-        .partition(|f| f.height < 0.85 * median_h && f.top / page_h < 0.5);
-
-    AssembledPage {
-        body: frags_to_lines(body, median_h),
-        footnotes: frags_to_lines(foot, median_h),
-        pending_carry: None,
-    }
-}
-
-/// Ordena fragmentos em linhas de leitura (topo→base; esquerda→direita).
-/// Espaço entre fragmentos só quando há VÃO horizontal real (fragmentos
-/// por glifo não podem ganhar espaço à força — viraria s o p a d e l e t r a s).
-fn frags_to_lines(mut frags: Vec<Frag>, median_h: f32) -> String {
-    if frags.is_empty() {
-        return String::new();
-    }
-    // Topo da página primeiro (coordenada y decrescente), pelo CENTRO.
-    frags.sort_by(|a, b| b.center_y.partial_cmp(&a.center_y).unwrap());
-    let mut lines: Vec<Vec<Frag>> = Vec::new();
-    let mut line_center = f32::MAX;
-    for frag in frags {
-        let mut tolerance = 0.55 * frag.height.max(median_h);
-        // Pontuação tem caixa minúscula no baseline: tolerância maior para
-        // não abrir "linha da vírgula" própria.
-        let is_punct = frag.text.chars().count() == 1
-            && frag
-                .text
-                .chars()
-                .next()
-                .map(|c| ",.;:!?»«\"'“”‘’-–—".contains(c))
-                .unwrap_or(false);
-        if is_punct {
-            tolerance = 1.2 * median_h;
-        }
-        if line_center == f32::MAX || line_center - frag.center_y > tolerance {
-            line_center = frag.center_y;
-            lines.push(Vec::new());
-        }
-        lines.last_mut().unwrap().push(frag);
-    }
-    let mut out: Vec<String> = Vec::new();
-    for mut line in lines {
-        line.sort_by(|a, b| a.left.partial_cmp(&b.left).unwrap());
-        let mut buf = String::new();
-        let mut prev_right: Option<f32> = None;
-        for frag in &line {
-            if let Some(pr) = prev_right {
-                // Vão > ~25% do corpo da fonte = separação de palavra.
-                if frag.left - pr > 0.25 * frag.height.max(median_h) {
-                    buf.push(' ');
-                } else if frag.left < pr - 0.15 * frag.height.max(median_h) {
-                    // Sobreposição horizontal: segmentos de ligadura repetem
-                    // glifos ("fo"+"forma" → "foforma"). Descarta o prefixo
-                    // do fragmento que já está no fim do buffer.
-                    let fchars: Vec<char> = frag.text.chars().collect();
-                    let mut overlap = 0usize;
-                    for k in (1..=fchars.len().min(4)).rev() {
-                        let prefix: String = fchars[..k].iter().collect();
-                        if buf.ends_with(&prefix) {
-                            overlap = k;
-                            break;
-                        }
-                    }
-                    if overlap > 0 {
-                        let rest: String = fchars[overlap..].iter().collect();
-                        buf.push_str(&rest);
-                        prev_right = Some(frag.right.max(pr));
-                        continue;
-                    }
-                }
-            }
-            buf.push_str(&frag.text);
-            prev_right = Some(frag.right.max(prev_right.unwrap_or(f32::MIN)));
-        }
-        out.push(buf);
-    }
-    out.join("\n")
 }
 
 /// Infere fronteiras de parágrafo em texto nativo sem linhas em branco.
@@ -1187,6 +1130,10 @@ fn token_accepts_carry(token: &str) -> bool {
             .unwrap_or(false)
 }
 
+// Pendência aberta (handover 16/Ago, item 2): transporte de palavra partida na
+// virada de página sem \x02. Já testada; será ligada no extract_pdf quando o
+// carry for validado com casos reais.
+#[allow(dead_code)]
 fn next_accepts_letter_carry(next: &str) -> bool {
     let first = next.split_whitespace().next().unwrap_or("");
     token_accepts_carry(first)
@@ -1457,5 +1404,39 @@ mod tests {
         assert!(check_cancel(Some(&|| false)).is_ok());
         let err = check_cancel(Some(&|| true)).unwrap_err();
         assert_eq!(err, CANCELLED);
+    }
+
+    // --- normalize_ocr_page_text (evidência Schopenhauer I, 16/Ago) ---
+
+    #[test]
+    fn ocr_norm_remove_barras_orfas() {
+        let raw = "sofo de Frankfurt já repercutia |\n|\ncomo re- |\npresentação";
+        let out = normalize_ocr_page_text(raw);
+        assert_eq!(out, "sofo de Frankfurt já repercutia\ncomo re-\npresentação");
+    }
+
+    #[test]
+    fn ocr_norm_junta_entrelinha_larga() {
+        // Padrão real da pág. 12: linha em branco após CADA linha.
+        let raw = "da ação humana não apenas no domínio de sua significação usual que le-\n\nva o egoísmo ou a malvadeza a darem as cartas nos relacionamentos hu-\n\nmanos, mas sobretudo daquela ação praticada por ascetas e santos, que\n";
+        let out = normalize_ocr_page_text(raw);
+        assert!(!out.contains("\n\n"), "brancos espúrios deviam sumir: {out:?}");
+        assert!(out.contains("le-\nva"), "hífen deve ficar adjacente: {out:?}");
+    }
+
+    #[test]
+    fn ocr_norm_preserva_paragrafo_legitimo() {
+        // Fim de sentença + próxima linha maiúscula = parágrafo de verdade.
+        let raw = "Sua confiança naquela forma foi completa.\n\nO que Nietzsche diz traduz boa parte\n\nda experiência vivida.";
+        let out = normalize_ocr_page_text(raw);
+        assert!(out.contains("completa.\n\nO que"), "parágrafo real preservado: {out:?}");
+        assert!(out.contains("parte\nda experiência"), "continuação minúscula junta: {out:?}");
+    }
+
+    #[test]
+    fn ocr_norm_preserva_titulo_seguido_de_maiuscula() {
+        let raw = "Apresentação\n\nUm livro que embriaga";
+        let out = normalize_ocr_page_text(raw);
+        assert_eq!(out, "Apresentação\n\nUm livro que embriaga");
     }
 }

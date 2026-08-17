@@ -9,7 +9,6 @@
 //! heurísticas determinísticas (espaços, hifenação de linha, etc.).
 //! Vocabulário = termos da própria fonte. Proposta sem âncora é rejeitada.
 
-use crate::cleanup::dehyphenate;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -157,11 +156,6 @@ pub fn dehyphen_proposals(text: &str) -> Vec<DiffProposal> {
         });
     }
     out
-}
-
-/// Aplica des-hifenização determinística (mesma regra do cleanup).
-pub fn apply_dehyphenate(text: &str) -> (String, usize) {
-    dehyphenate(text)
 }
 
 /// Prompt de fidelidade: só diffs ancorados; sem reescrita de estilo.

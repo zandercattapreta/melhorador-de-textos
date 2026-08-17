@@ -190,6 +190,25 @@ function App() {
   prefsRef.current = jobPrefs;
   const stopAllRef = useRef(false);
   const previewRef = useRef<HTMLPreElement>(null);
+  /** Painel do texto ao vivo: gruda no fim (página recém-capturada) enquanto
+   *  o usuário não rolar para trás; rolar de volta ao fim re-gruda. */
+  const partialPaneRef = useRef<HTMLDivElement>(null);
+  const partialStickRef = useRef(true);
+
+  function handlePartialScroll() {
+    const el = partialPaneRef.current;
+    if (!el) return;
+    partialStickRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }
+
+  useEffect(() => {
+    // Texto novo chegou: acompanha o caminhar das páginas.
+    const el = partialPaneRef.current;
+    if (el && partialStickRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [partialText]);
   /** Melhor texto por página durante o OCR (bruto → rápido → LT/IA). */
   const liveReviewedRef = useRef<Map<number, string>>(new Map());
   const livePageGenRef = useRef<Map<number, number>>(new Map());
@@ -202,32 +221,15 @@ function App() {
     setPartialText(ordered.join("\n\n"));
   }
 
-  /** Rápido: des-hífen + heurística (aparece na caixa na hora). */
-  async function reviewChunkFast(text: string): Promise<string> {
-    let trimmed = text.trim();
+  /** Melhorize imediato da página (limpeza + estrutura + regras, SEM IA). */
+  async function melhorizeChunk(text: string): Promise<string> {
+    const trimmed = text.trim();
     if (!trimmed) return text;
     try {
-      const [dehyph] = await invoke<[string, number]>("dehyphenate_text", {
-        text: trimmed,
-      });
-      trimmed = dehyph;
+      return await invoke<string>("melhorize_page", { text: trimmed });
     } catch {
-      /* mantém */
+      return trimmed;
     }
-    try {
-      const report = await invoke<ReviewReport>("propose_heuristic_review", {
-        text: trimmed,
-      });
-      if (report.proposals.length > 0) {
-        trimmed = await invoke<string>("apply_review_diffs", {
-          text: trimmed,
-          accepted: report.proposals,
-        });
-      }
-    } catch {
-      /* mantém dehyphen */
-    }
-    return trimmed;
   }
 
   /** Mais lento: LT ou IA local (atualiza a página quando terminar). */
@@ -265,7 +267,6 @@ function App() {
 
   function enqueueLivePageReview(page: number, raw: string) {
     const rev = prefsRef.current.review;
-    if (rev !== "lt" && rev !== "local_ai") return;
     const chunk = raw.trim();
     if (!chunk) return;
 
@@ -274,18 +275,20 @@ function App() {
     liveReviewedRef.current.set(page, chunk);
     refreshLivePartial();
 
-    // 2) Melhoria rápida na hora (hífens etc.) — paralelo ao OCR.
     const job = (async () => {
       if (stopAllRef.current) return;
       try {
-        const fast = await reviewChunkFast(chunk);
+        // 2) Melhorize imediato (limpeza+estrutura, sem IA) — a caixa mostra
+        // texto já melhorado assim que a página sai da captura, SEMPRE.
+        const improved = await melhorizeChunk(chunk);
         if (livePageGenRef.current.get(page) !== gen) return;
-        liveReviewedRef.current.set(page, fast);
+        liveReviewedRef.current.set(page, improved);
         refreshLivePartial();
-        setInfo(`Página ${page}: hífens/limpo · captura segue…`);
+        setInfo(`Página ${page} melhorada · captura segue…`);
 
-        // 3) LT ou IA em paralelo (não bloqueia outras páginas).
-        const deep = await reviewChunkDeep(fast, rev);
+        // 3) LT ou IA em paralelo, só se o usuário ligou (não bloqueia páginas).
+        if (rev !== "lt" && rev !== "local_ai") return;
+        const deep = await reviewChunkDeep(improved, rev);
         if (livePageGenRef.current.get(page) !== gen) return;
         liveReviewedRef.current.set(page, deep);
         refreshLivePartial();
@@ -364,14 +367,8 @@ function App() {
       const chunk = (e.payload.pageText ?? "").trim();
       if (chunk) {
         if (page >= 1) setConfPage(page);
-        const rev = prefsRef.current.review;
-        if (rev === "lt" || rev === "local_ai") {
-          enqueueLivePageReview(page, chunk);
-        } else {
-          // Sem revisão: acumula bruto por página (não sobrescreve o livro).
-          liveReviewedRef.current.set(page, chunk);
-          refreshLivePartial();
-        }
+        // Melhorize sempre; LT/IA só se o usuário ligou (dentro da fila).
+        enqueueLivePageReview(page, chunk);
       }
     });
     return () => {
@@ -470,6 +467,7 @@ function App() {
     liveReviewedRef.current.clear();
     livePageGenRef.current.clear();
     liveInflightRef.current.clear();
+    partialStickRef.current = true;
     stopAllRef.current = false;
     const isPdf = path.toLowerCase().endsWith(".pdf");
     const revPref = prefsRef.current.review;
@@ -562,6 +560,8 @@ function App() {
         const outcome = await processOne(paths[i]);
         if (outcome === "fail" || outcome === "stop") break;
       }
+      // R5d: fila terminou — libera o GGUF residente (6 GiB) da memória.
+      void invoke("unload_llama_model").catch(() => undefined);
     },
     [processOne],
   );
@@ -580,6 +580,8 @@ function App() {
       setQueue([path]);
       setQueueIndex(0);
       await processOne(path);
+      // R5d: livro único terminou — libera o GGUF residente da memória.
+      void invoke("unload_llama_model").catch(() => undefined);
     },
     [processOne, runQueue],
   );
@@ -1151,11 +1153,15 @@ function App() {
               <div className="text-toolbar">
                 <p className="hint">
                   {jobPrefs.review === "none"
-                    ? "Bruto desta página — limpeza no final"
-                    : "Texto revisado entra aqui enquanto a captura segue"}
+                    ? "Texto melhorado página a página — acabamento no final"
+                    : "Texto melhorado página a página + revisão em paralelo"}
                 </p>
               </div>
-              <div className="book-pane">
+              <div
+                className="book-pane"
+                ref={partialPaneRef}
+                onScroll={handlePartialScroll}
+              >
                 <pre className="preview partial">{partialText}</pre>
               </div>
             </>

@@ -84,16 +84,7 @@ pub fn clean_and_structure_pages_with_rules(
     };
     let mut pages = Vec::with_capacity(slices.len());
     for slice in slices {
-        let cleaned = cleanup::clean_text_enhanced(slice, true, 0);
-        let (de_typo, _) = typos::apply_ocr_typos(&cleaned.text);
-        let after_rules = rules::apply_user_rules(&de_typo, user_rules);
-        let mut structured = structure::apply_structure_enhanced(&after_rules);
-        let (annotated, _) = blocks::annotate_blocks(&structured.text);
-        structured.text = annotated;
-        // Conferência: nunca deixar a página “muda”. Se só sobrou [figura]/vazio,
-        // mostra o bruto da fatia ou um aviso claro em PT-BR.
-        let page_out = conference_page_text(&structured.text, slice);
-        pages.push(page_out);
+        pages.push(melhorize_page_with_rules(slice, user_rules));
     }
     let (full, cleanup) = clean_and_structure_enhanced_with_rules(raw_text, user_rules);
     PagesResult {
@@ -101,6 +92,22 @@ pub fn clean_and_structure_pages_with_rules(
         full,
         cleanup,
     }
+}
+
+/// Melhorize de UMA página (modo aprimorado): limpeza + typos + regras do
+/// usuário + estrutura + blocos. Usado na conferência E na caixa ao vivo
+/// durante a captura (U1c) — a passada final no livro inteiro segue sendo
+/// a âncora do arquivo salvo (regras que cruzam páginas).
+pub fn melhorize_page_with_rules(slice: &str, user_rules: &[rules::UserRule]) -> String {
+    let cleaned = cleanup::clean_text_enhanced(slice, true, 0);
+    let (de_typo, _) = typos::apply_ocr_typos(&cleaned.text);
+    let after_rules = rules::apply_user_rules(&de_typo, user_rules);
+    let mut structured = structure::apply_structure_enhanced(&after_rules);
+    let (annotated, _) = blocks::annotate_blocks(&structured.text);
+    structured.text = annotated;
+    // Conferência: nunca deixar a página “muda”. Se só sobrou [figura]/vazio,
+    // mostra o bruto da fatia ou um aviso claro em PT-BR.
+    conference_page_text(&structured.text, slice)
 }
 
 /// Texto da página para o painel de conferência (humano, sempre legível).
