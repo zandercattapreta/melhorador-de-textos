@@ -6,6 +6,7 @@ target/
 # Build output
 dist/
 build/
+_APP/version/
 *.js.map
 *.egg-info/
 **/__pycache__/

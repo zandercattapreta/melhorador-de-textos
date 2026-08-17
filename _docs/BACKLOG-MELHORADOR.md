@@ -64,7 +64,7 @@ Pedido Zander 16/Ago: redesenhar a interface via skill Claude Design / `frontend
 |---|---|---|
 | **U1** | Layout B (16/Ago): barra única + 2 colunas Original \| Texto; drawer Ajustes/Revisão | ✅ |
 | **U1b** | Wizard config: 1º run + pergunta antes de cada **transcrição/scan** (colunas, ilustrações, idioma, LT/IA) | ✅ |
-| **U1c** | Revisão em paralelo com OCR (texto já revisado na caixa) | ❌ **quebrado** — trava (reload GGUF/página); Zander EOD 16/Ago |
+| **U1c** | Revisão em paralelo com OCR (texto já revisado na caixa) | 🔧 corrigido 16/Ago noite (modelo residente + async + melhorize/página + OCR normalizado + fit/scroll) — **aguarda UAT** |
 | **U2** | Tipografia Source Serif 4 no texto do livro; rail quieto | ✅ |
 | **U3** | Revisão / Ajustes / modelos / LT em painéis recolhidos (não entulham) | ✅ |
 | **U4** | Remover slogans e ruído de UI | ✅ |

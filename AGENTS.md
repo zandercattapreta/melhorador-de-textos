@@ -22,6 +22,7 @@ bash _CLI/melhorar.sh                         # lote CLI (da raiz)
 txtmelhorator extract --input "_originais/<arquivo>.pdf" --pages 21-30
 cd _APP/core && cargo test --release          # core Rust + goldens (sempre --release)
 cd _APP && npm run tauri dev                  # janela do app
+bash _APP/scripts/build-release.sh            # build oficial → _APP/version/<data_hora>/TXTMelhorator.app
 ```
 
 Gerenciador: `pip` dentro de `_CLI/.venv` (Python 3.12); não misturar com o Python do sistema. Comandos do CLI rodam **da raiz**. App: Rust stable + Node; o CLI é a referência dos golden masters. OCR do app ainda usa Tesseract do Homebrew.

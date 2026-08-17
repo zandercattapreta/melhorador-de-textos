@@ -8,7 +8,7 @@ atualizado_em: 2026-08-16
 
 Uma ferramenta, duas superfícies: **App desktop** (`_APP/`) e **CLI** (`_CLI/`, referência). PRD único: [`PRD-MELHORADOR.md`](PRD-MELHORADOR.md).
 
-Retomando o trabalho? [`HANDOVER-2026-08-16.md`](HANDOVER-2026-08-16.md).
+Retomando o trabalho? [`HANDOVER-2026-08-17.md`](HANDOVER-2026-08-17.md) (mais recente) · anteriores: [`HANDOVER-2026-08-16-EOD.md`](HANDOVER-2026-08-16-EOD.md) · [`HANDOVER-2026-08-16.md`](HANDOVER-2026-08-16.md).
 
 Regras: [`POLITICA_DOCS.md`](POLITICA_DOCS.md).
 
@@ -17,7 +17,7 @@ Regras: [`POLITICA_DOCS.md`](POLITICA_DOCS.md).
 | Doc | Para |
 |---|---|
 | [`PRD-MELHORADOR.md`](PRD-MELHORADOR.md) | **produto** — rotina do app (§5), princípios, o que não faz |
-| [`HANDOVER-2026-08-16.md`](HANDOVER-2026-08-16.md) | retomar o trabalho — estado, pendências, armadilhas |
+| [`HANDOVER-2026-08-17.md`](HANDOVER-2026-08-17.md) | retomar o trabalho — estado, pendências, armadilhas |
 | [`BACKLOG-MELHORADOR.md`](BACKLOG-MELHORADOR.md) | **fila** R1→R5 · feito · ops |
 | [`PLANO-APP-MELHORADOR.md`](PLANO-APP-MELHORADOR.md) | plano do app: stack, fases, decisões |
 | [`ARQUITETURA-MELHORADOR.md`](ARQUITETURA-MELHORADOR.md) | App hoje × alvo (motores, revisão, casca) + CLI |

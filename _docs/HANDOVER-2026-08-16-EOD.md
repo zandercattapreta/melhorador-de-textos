@@ -1,6 +1,6 @@
 ---
-sistema: TXTMELHORATOR
-tipo: handover
+sistema: MELHORADOR
+tipo: sessao
 atualizado_em: 2026-08-16
 ---
 
