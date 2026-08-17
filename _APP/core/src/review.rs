@@ -1,16 +1,19 @@
 // ==============================================================================
 // SCRIPT: review.rs (txtmelhorator-core)
-// DESCRIÇÃO: Revisão opt-in (R5) — propõe diffs; nunca aplica sozinha
-// CHAMADO POR: comando Tauri propose_review; UI aceitar/rejeitar
-// CONTRATO (RESPOSTA ESPERADA): lista de propostas ancoradas no texto fonte
+// DESCRIÇÃO: Revisão opt-in (R5) — heurística + IA; UI aplica + Desfazer
+// CHAMADO POR: comando Tauri propose_review; UI
+// CONTRATO: propostas ancoradas; inclui des-hifenização de fim de linha
 // ==============================================================================
 
 //! IA local (GGUF) entra depois, se existir no aparelho. Sem modelo: só
-//! heurísticas determinísticas (espaços duplos, etc.). Vocabulário = termos
-//! da própria fonte. Proposta sem âncora no original é rejeitada.
+//! heurísticas determinísticas (espaços, hifenação de linha, etc.).
+//! Vocabulário = termos da própria fonte. Proposta sem âncora é rejeitada.
 
+use crate::cleanup::dehyphenate;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffProposal {
@@ -68,11 +71,13 @@ fn reject_if_unanchored(text: &str, original: &str, proposed: &str) -> bool {
     false
 }
 
-/// Revisão heurística local (sem LLM). Só propõe; não aplica.
+/// Revisão heurística local (sem LLM). A UI aplica + Desfazer.
 pub fn propose_heuristic_review(text: &str) -> ReviewReport {
     let vocabulary = extract_vocabulary(text, 80);
     let vocab_set: BTreeSet<_> = vocabulary.iter().cloned().collect();
     let mut proposals = Vec::new();
+
+    proposals.extend(dehyphen_proposals(text));
 
     // Espaços duplos → um espaço (âncora literal).
     if let Some(idx) = text.find("  ") {
@@ -103,15 +108,60 @@ pub fn propose_heuristic_review(text: &str) -> ReviewReport {
         }
     }
 
-    // Aviso se termo do vocabulário aparece partido com espaço no meio (muito conservador: skip)
-
     let _ = vocab_set;
+    let n_hyph = proposals
+        .iter()
+        .filter(|p| p.reason.contains("hifenação"))
+        .count();
     ReviewReport {
         proposals,
         vocabulary,
         engine: "basico".into(),
-        note: "Correções simples (espaços etc.). Para mais, use LanguageTool ou IA.".into(),
+        note: if n_hyph > 0 {
+            format!("Inclui {n_hyph} juntura(s) de hifenação. LanguageTool/IA pegam o resto.")
+        } else {
+            "Correções simples (hífens de linha, espaços). LanguageTool/IA ampliam.".into()
+        },
     }
+}
+
+fn review_hyphen_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"([A-Za-zÀ-ÿ]+)-\r?\n([a-zà-ÿ])").unwrap())
+}
+
+/// Uma proposta por ocorrência: "civiliza-\nção" → "civilização".
+pub fn dehyphen_proposals(text: &str) -> Vec<DiffProposal> {
+    let mut out = Vec::new();
+    for caps in review_hyphen_re().captures_iter(text) {
+        let m = caps.get(0).expect("match");
+        let original = m.as_str().to_string();
+        let proposed = format!("{}{}", &caps[1], &caps[2]);
+        if reject_if_unanchored(text, &original, &proposed) {
+            continue;
+        }
+        out.push(DiffProposal {
+            original,
+            proposed,
+            reason: "hifenação de fim de linha".into(),
+            byte_offset: m.start(),
+        });
+    }
+    // Soft hyphen (OCR) — remove o caractere invisível.
+    if let Some(idx) = text.find('\u{00ad}') {
+        out.push(DiffProposal {
+            original: "\u{00ad}".into(),
+            proposed: "".into(),
+            reason: "hífen suave (OCR)".into(),
+            byte_offset: idx,
+        });
+    }
+    out
+}
+
+/// Aplica des-hifenização determinística (mesma regra do cleanup).
+pub fn apply_dehyphenate(text: &str) -> (String, usize) {
+    dehyphenate(text)
 }
 
 /// Prompt de fidelidade: só diffs ancorados; sem reescrita de estilo.
@@ -123,8 +173,9 @@ pub fn fidelity_prompt(text: &str, vocabulary: &[String]) -> String {
 1) Só proponha correções de OCR/digitação ancoradas no trecho original.
 2) Nunca invente frases, nomes ou fatos.
 3) Nunca reescreva o estilo do autor.
-4) Vocabulário do livro (use como âncora): {vocab}
-5) Responda SOMENTE JSON array: [{{"original":"...","proposed":"...","reason":"..."}}]
+4) SEMPRE junte hifenação de fim de linha: "pala-\nvra" → "palavra"; "civiliza-\nção" → "civilização". Não remova hífens reais de compostos (ex.: guarda-chuva) quando as duas partes estão na mesma linha.
+5) Vocabulário do livro (use como âncora): {vocab}
+6) Responda SOMENTE JSON array: [{{"original":"...","proposed":"...","reason":"..."}}]
 Texto:
 ---
 {sample}
@@ -185,7 +236,8 @@ pub fn merge_llm_review(text: &str, model_stdout: &str) -> ReviewReport {
     }
     base.proposals.append(&mut llm);
     base.engine = "ia-local".into();
-    base.note = "Sugestões da IA local (no app). Nada entra no texto sem você aceitar.".into();
+    base.note =
+        "IA local: inclui juntar hifenação de linha. Desfazer restaura o anterior.".into();
     base.vocabulary = vocabulary;
     base
 }
@@ -246,6 +298,17 @@ mod tests {
         let t = "Atenas Atenas pólis Demóstenes Demóstenes história história história";
         let v = extract_vocabulary(t, 10);
         assert!(v.iter().any(|w| w == "atenas" || w == "demóstenes" || w.contains("histor")));
+    }
+
+    #[test]
+    fn dehyphen_propostas() {
+        let t = "civiliza-\nção e pala-\nvra";
+        let ps = dehyphen_proposals(t);
+        assert!(ps.len() >= 2);
+        let applied = apply_accepted_diffs(t, &ps).unwrap();
+        assert!(applied.contains("civilização"));
+        assert!(applied.contains("palavra"));
+        assert!(!applied.contains("-\n"));
     }
 
     #[test]

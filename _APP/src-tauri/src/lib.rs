@@ -10,6 +10,15 @@ mod gguf;
 mod llama_infer;
 mod lt;
 
+/// Experimento/bench: uma geração GGUF com timing externo.
+pub fn llama_infer_bench(
+    path: &std::path::Path,
+    prompt: &str,
+    max_tokens: i32,
+) -> Result<String, String> {
+    llama_infer::generate(path, prompt, max_tokens)
+}
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -338,12 +347,27 @@ fn propose_review(app: AppHandle, text: String) -> Result<txtmelhorator_core::re
     }
 }
 
+/// Só heurística (hífens, espaços) — rápida, para revisão ao vivo durante o OCR.
+#[tauri::command]
+fn propose_heuristic_review(
+    text: String,
+) -> Result<txtmelhorator_core::review::ReviewReport, String> {
+    Ok(txtmelhorator_core::review::propose_heuristic_review(&text))
+}
+
 #[tauri::command]
 fn apply_review_diffs(
     text: String,
     accepted: Vec<txtmelhorator_core::review::DiffProposal>,
 ) -> Result<String, String> {
     txtmelhorator_core::review::apply_accepted_diffs(&text, &accepted)
+}
+
+/// Des-hifenização determinística (fim de linha) — usada na revisão ao vivo.
+#[tauri::command]
+fn dehyphenate_text(text: String) -> Result<(String, u32), String> {
+    let (out, n) = txtmelhorator_core::review::apply_dehyphenate(&text);
+    Ok((out, n as u32))
 }
 
 /// tessdata: app-data → resource bundle → Homebrew (via core).
@@ -690,7 +714,9 @@ pub fn run() {
             list_user_rules,
             save_user_rules,
             propose_review,
+            propose_heuristic_review,
             apply_review_diffs,
+            dehyphenate_text,
             get_lt_settings,
             save_lt_settings,
             ensure_lt_server,

@@ -97,8 +97,8 @@ Funcional e curto: 120–180 ms, ease-out. Barra de progresso e spinner são os 
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### T2 — Detalhe do livro
-Preview do texto (serif, 68ch) + coluna direita: metadados (autor/título/ISBN detectados + confiança), estatísticas do report, tabela de avisos clicável. CTA: **[Revisar sugestões]** / [Exportar].
+### T2 — Conferência (Layout B — barra única)
+Decisão 16/Ago: conferência = **Layout B**. Topbar (marca + arquivo) → barra única (Abrir PDF · Abrir pasta · Pular · Parar · progresso · OCR · Revisão · Ajustes) → grade **2 colunas** (Original | Texto). Ajustes/Revisão abrem em drawer. Tokens DS Melhorator (não o mock escuro da proposta).
 
 ### T3 — Revisão (diff)
 Tela cheia do diff viewer (componente acima). Fonte das sugestões alternável em abas: `LanguageTool` · `IA local (Gemma 3 4B)` — cada aba com seu diff independente. Rodapé fixo: "Nada é aplicado sem sua aprovação · fonte intacta (sha256 …a1b2)".
@@ -106,8 +106,10 @@ Tela cheia do diff viewer (componente acima). Fonte das sugestões alternável e
 ### T4 — Exportação
 Formato (.md / .txt / .docx) + destino + opções (incluir metadados de auditoria no rodapé; docx: mapa de estilos). Botão primário Exportar → toast com "Mostrar no Finder/Explorer".
 
-### T5 — Configurações
-Abas: **Geral** (idiomas OCR, faixa-amostra vs livro inteiro, tema; **sem pastas fixas** — origem/destino são perguntados no fluxo e o app apenas lembra as últimas escolhas; botão "Limpar dados temporários" do app-data) · **LanguageTool** (conta Premium: username+apiKey no chaveiro; servidor local: URL opcional; aviso claro de nuvem) · **Modelos de IA** (catálogo com cards, download/remover/ativar; aviso de RAM) · **Sobre**.
+### T5 — Configurações / Wizard
+**Wizard (16/Ago):** no 1º run abre sozinho; antes de cada PDF/pasta pergunta “Configurar esta transcrição?” (scan/OCR — não “o livro”). Passos: colunas · ilustrações · língua · revisão. Revisão **aplica** + **Desfazer**.
+
+Abas futuras: **Geral** · **LanguageTool** · **Modelos de IA** · **Sobre**.
 
 ## 4. Estados e mensagens
 

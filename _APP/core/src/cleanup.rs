@@ -61,7 +61,8 @@ fn edge_garbage_re() -> &'static Regex {
 
 fn line_hyphen_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"([A-Za-zÀ-ÿ]+)-\n([a-zà-ÿ])").unwrap())
+    // Fim de linha (\n ou \r\n): "pala-\nvra" → "palavra"
+    RE.get_or_init(|| Regex::new(r"([A-Za-zÀ-ÿ]+)-\r?\n([a-zà-ÿ])").unwrap())
 }
 
 fn embedded_numbered_re() -> &'static FancyRegex {

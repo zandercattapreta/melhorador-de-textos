@@ -2,7 +2,7 @@
 // SCRIPT: App.tsx (txtmelhorator-app)
 // DESCRIÇÃO: Rotina completa — fila, conferência sync, regras (R4), revisão (R5)
 // CHAMADO POR: main.tsx
-// CONTRATO (RESPOSTA ESPERADA): processar → conferir página|texto → salvar; opt-in review
+// CONTRATO (RESPOSTA ESPERADA): processar → revisar (aplica+Desfazer) → conferir → salvar
 // ==============================================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -16,6 +16,15 @@ type OcrLang = "auto" | "por" | "eng" | "por+eng";
 type Outcome = "ok" | "fail" | "skip" | "stop";
 type TextView = "page" | "book";
 type RuleKind = "header" | "note" | "no_join";
+type ReviewPref = "none" | "lt" | "local_ai";
+type ColumnsPref = "1" | "2+";
+
+type JobPrefs = {
+  columns: ColumnsPref;
+  illustrations: boolean;
+  lang: OcrLang;
+  review: ReviewPref;
+};
 
 type ProcessResult = {
   source_name: string;
@@ -58,7 +67,16 @@ type ModelOffer = {
 const LS_LANG = "txtmelhorator.lang";
 const LS_SAVE_DIR = "txtmelhorator.lastSaveDir";
 const LS_VIEW = "txtmelhorator.textView";
+const LS_WIZARD_DONE = "txtmelhorator.wizard.firstDone";
+const LS_JOB_PREFS = "txtmelhorator.wizard.prefs";
 const CANCELLED = "CANCELLED";
+
+const DEFAULT_PREFS: JobPrefs = {
+  columns: "1",
+  illustrations: false,
+  lang: "por+eng",
+  review: "none",
+};
 
 function loadLang(): OcrLang {
   const v = localStorage.getItem(LS_LANG);
@@ -68,6 +86,35 @@ function loadLang(): OcrLang {
 
 function loadView(): TextView {
   return localStorage.getItem(LS_VIEW) === "book" ? "book" : "page";
+}
+
+function loadPrefs(): JobPrefs {
+  try {
+    const raw = localStorage.getItem(LS_JOB_PREFS);
+    if (!raw) return { ...DEFAULT_PREFS, lang: loadLang() };
+    const p = JSON.parse(raw) as Partial<JobPrefs>;
+    const lang =
+      p.lang === "auto" ||
+      p.lang === "por" ||
+      p.lang === "eng" ||
+      p.lang === "por+eng"
+        ? p.lang
+        : loadLang();
+    return {
+      columns: p.columns === "2+" ? "2+" : "1",
+      illustrations: !!p.illustrations,
+      lang,
+      review:
+        p.review === "lt" || p.review === "local_ai" ? p.review : "none",
+    };
+  } catch {
+    return { ...DEFAULT_PREFS, lang: loadLang() };
+  }
+}
+
+function savePrefs(p: JobPrefs) {
+  localStorage.setItem(LS_JOB_PREFS, JSON.stringify(p));
+  localStorage.setItem(LS_LANG, p.lang);
 }
 
 function parentDir(path: string): string {
@@ -95,6 +142,17 @@ function App() {
   const [partialText, setPartialText] = useState<string>("");
   const [processingPath, setProcessingPath] = useState<string | null>(null);
   const [lang, setLang] = useState<OcrLang>(loadLang);
+  const [jobPrefs, setJobPrefs] = useState<JobPrefs>(loadPrefs);
+  const [wizardOpen, setWizardOpen] = useState(
+    () => localStorage.getItem(LS_WIZARD_DONE) !== "1",
+  );
+  const [wizardDraft, setWizardDraft] = useState<JobPrefs>(loadPrefs);
+  const [wizardMode, setWizardMode] = useState<"first" | "book">("first");
+  const [askBookWizard, setAskBookWizard] = useState(false);
+  const [pendingOpen, setPendingOpen] = useState<"pdf" | "folder" | "drop" | null>(
+    null,
+  );
+  const [pendingDropPath, setPendingDropPath] = useState<string | null>(null);
   const [queue, setQueue] = useState<string[]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
   const [confPage, setConfPage] = useState(1);
@@ -105,8 +163,11 @@ function App() {
   const [ruleKind, setRuleKind] = useState<RuleKind>("header");
   const [rulePattern, setRulePattern] = useState("");
   const [review, setReview] = useState<ReviewReport | null>(null);
-  const [accepted, setAccepted] = useState<Set<number>>(new Set());
   const [acceptedTrail, setAcceptedTrail] = useState<DiffProposal[]>([]);
+  const [preReview, setPreReview] = useState<{
+    cleaned: string;
+    pages: string[];
+  } | null>(null);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [leftPanel, setLeftPanel] = useState<"none" | "revisao" | "ajustes">("none");
   const [gguf, setGguf] = useState<{
@@ -125,8 +186,119 @@ function App() {
   const [showModelUrlDownload, setShowModelUrlDownload] = useState(false);
   const langRef = useRef(lang);
   langRef.current = lang;
+  const prefsRef = useRef(jobPrefs);
+  prefsRef.current = jobPrefs;
   const stopAllRef = useRef(false);
   const previewRef = useRef<HTMLPreElement>(null);
+  /** Melhor texto por página durante o OCR (bruto → rápido → LT/IA). */
+  const liveReviewedRef = useRef<Map<number, string>>(new Map());
+  const livePageGenRef = useRef<Map<number, number>>(new Map());
+  const liveInflightRef = useRef<Set<Promise<void>>>(new Set());
+
+  function refreshLivePartial() {
+    const ordered = [...liveReviewedRef.current.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, t]) => t);
+    setPartialText(ordered.join("\n\n"));
+  }
+
+  /** Rápido: des-hífen + heurística (aparece na caixa na hora). */
+  async function reviewChunkFast(text: string): Promise<string> {
+    let trimmed = text.trim();
+    if (!trimmed) return text;
+    try {
+      const [dehyph] = await invoke<[string, number]>("dehyphenate_text", {
+        text: trimmed,
+      });
+      trimmed = dehyph;
+    } catch {
+      /* mantém */
+    }
+    try {
+      const report = await invoke<ReviewReport>("propose_heuristic_review", {
+        text: trimmed,
+      });
+      if (report.proposals.length > 0) {
+        trimmed = await invoke<string>("apply_review_diffs", {
+          text: trimmed,
+          accepted: report.proposals,
+        });
+      }
+    } catch {
+      /* mantém dehyphen */
+    }
+    return trimmed;
+  }
+
+  /** Mais lento: LT ou IA local (atualiza a página quando terminar). */
+  async function reviewChunkDeep(
+    text: string,
+    rev: "lt" | "local_ai",
+  ): Promise<string> {
+    let trimmed = text.trim();
+    if (!trimmed) return text;
+    if (rev === "lt") {
+      const proposals = await invoke<DiffProposal[]>("check_lt_local", {
+        text: trimmed,
+      });
+      if (proposals.length === 0) return trimmed;
+      return invoke<string>("apply_review_diffs", {
+        text: trimmed,
+        accepted: proposals,
+      });
+    }
+    const report = await invoke<ReviewReport>("propose_review", {
+      text: trimmed,
+    });
+    if (report.proposals.length === 0) return trimmed;
+    return invoke<string>("apply_review_diffs", {
+      text: trimmed,
+      accepted: report.proposals,
+    });
+  }
+
+  function bumpPageGen(page: number): number {
+    const g = (livePageGenRef.current.get(page) ?? 0) + 1;
+    livePageGenRef.current.set(page, g);
+    return g;
+  }
+
+  function enqueueLivePageReview(page: number, raw: string) {
+    const rev = prefsRef.current.review;
+    if (rev !== "lt" && rev !== "local_ai") return;
+    const chunk = raw.trim();
+    if (!chunk) return;
+
+    const gen = bumpPageGen(page);
+    // 1) Mostra bruto acumulado (não apaga páginas anteriores).
+    liveReviewedRef.current.set(page, chunk);
+    refreshLivePartial();
+
+    // 2) Melhoria rápida na hora (hífens etc.) — paralelo ao OCR.
+    const job = (async () => {
+      if (stopAllRef.current) return;
+      try {
+        const fast = await reviewChunkFast(chunk);
+        if (livePageGenRef.current.get(page) !== gen) return;
+        liveReviewedRef.current.set(page, fast);
+        refreshLivePartial();
+        setInfo(`Página ${page}: hífens/limpo · captura segue…`);
+
+        // 3) LT ou IA em paralelo (não bloqueia outras páginas).
+        const deep = await reviewChunkDeep(fast, rev);
+        if (livePageGenRef.current.get(page) !== gen) return;
+        liveReviewedRef.current.set(page, deep);
+        refreshLivePartial();
+        setInfo(`Página ${page} revisada · captura segue…`);
+      } catch {
+        if (livePageGenRef.current.get(page) !== gen) return;
+        liveReviewedRef.current.set(page, chunk);
+        refreshLivePartial();
+      }
+    })();
+    liveInflightRef.current.add(job);
+    void job.finally(() => liveInflightRef.current.delete(job));
+  }
 
   useEffect(() => {
     localStorage.setItem(LS_LANG, lang);
@@ -170,8 +342,8 @@ function App() {
   useEffect(() => {
     setConfPage(1);
     setReview(null);
-    setAccepted(new Set());
     setAcceptedTrail([]);
+    setPreReview(null);
     if (result?.source_path) setPageImg(null);
   }, [result?.source_path]);
 
@@ -191,8 +363,15 @@ function App() {
       }
       const chunk = (e.payload.pageText ?? "").trim();
       if (chunk) {
-        setPartialText(chunk);
         if (page >= 1) setConfPage(page);
+        const rev = prefsRef.current.review;
+        if (rev === "lt" || rev === "local_ai") {
+          enqueueLivePageReview(page, chunk);
+        } else {
+          // Sem revisão: acumula bruto por página (não sobrescreve o livro).
+          liveReviewedRef.current.set(page, chunk);
+          refreshLivePartial();
+        }
       }
     });
     return () => {
@@ -200,7 +379,11 @@ function App() {
     };
   }, []);
 
-  async function promptAndSave(r: ProcessResult, format: "md" | "txt" | "docx") {
+  async function promptAndSave(
+    r: ProcessResult,
+    format: "md" | "txt" | "docx",
+    diffs: DiffProposal[] = acceptedTrail,
+  ) {
     const remembered = localStorage.getItem(LS_SAVE_DIR);
     const fallback = parentDir(r.source_path);
     const defaultPath = remembered && remembered.length > 0 ? remembered : fallback;
@@ -223,12 +406,50 @@ function App() {
         engine: r.engine,
         languages: r.languages_used,
         pageCount: r.page_count,
-        acceptedDiffs: acceptedTrail,
+        acceptedDiffs: diffs,
       });
       setSavedTo(dest);
     } catch (e) {
       setError(errText(e));
     }
+  }
+
+  /** Revisão aplica de imediato; guarda snapshot para Desfazer. */
+  async function applyReviewNow(
+    base: ProcessResult,
+    proposals: DiffProposal[],
+    engine: string,
+  ): Promise<{ result: ProcessResult; applied: DiffProposal[] }> {
+    if (proposals.length === 0) {
+      setPreReview(null);
+      setAcceptedTrail([]);
+      setReview({
+        proposals: [],
+        vocabulary: [],
+        engine,
+        note: "Nenhuma correção necessária.",
+      });
+      setInfo("Revisão: nada a corrigir.");
+      return { result: base, applied: [] };
+    }
+    setPreReview({ cleaned: base.cleaned, pages: base.pages });
+    const next = await invoke<string>("apply_review_diffs", {
+      text: base.cleaned,
+      accepted: proposals,
+    });
+    const updated: ProcessResult = { ...base, cleaned: next, pages: [] };
+    setResult(updated);
+    setAcceptedTrail(proposals);
+    setReview({
+      proposals,
+      vocabulary: [],
+      engine,
+      note: `${proposals.length} correção(ões) aplicadas. Use Desfazer se algo estranho.`,
+    });
+    setInfo(`${proposals.length} correção(ões) aplicadas.`);
+    setTextView("book");
+    requestAnimationFrame(() => jumpTo(0));
+    return { result: updated, applied: proposals };
   }
 
   const processOne = useCallback(async (path: string): Promise<Outcome> => {
@@ -243,8 +464,15 @@ function App() {
     setConfPage(1);
     setPageImg(null);
     setPageBusy(false);
+    setReview(null);
+    setAcceptedTrail([]);
+    setPreReview(null);
+    liveReviewedRef.current.clear();
+    livePageGenRef.current.clear();
+    liveInflightRef.current.clear();
     stopAllRef.current = false;
     const isPdf = path.toLowerCase().endsWith(".pdf");
+    const revPref = prefsRef.current.review;
     if (isPdf) {
       // Primeira página antes do OCR (ainda sem lock no arquivo).
       setPageBusy(true);
@@ -254,12 +482,59 @@ function App() {
         .finally(() => setPageBusy(false));
     }
     try {
+      // LT pronto antes da 1ª página — revisão roda junto com a captura.
+      if (revPref === "lt") {
+        setInfo("LanguageTool pronto — captura + revisão em paralelo…");
+        await invoke<string>("ensure_lt_server");
+      } else if (revPref === "local_ai") {
+        setInfo("Captura + IA local em paralelo…");
+      }
+
       const r = await invoke<ProcessResult>(
         isPdf ? "process_pdf" : "process_text_file",
         isPdf ? { path, languages: langRef.current } : { path },
       );
+
+      // Espera revisões de página ainda em voo.
+      await Promise.allSettled([...liveInflightRef.current]);
+
+      let out = r;
+      let applied: DiffProposal[] = [];
       setResult(r);
-      await promptAndSave(r, "md");
+
+      // Passo final no texto já limpo/estruturado (âncora do arquivo salvo).
+      if (revPref === "lt" || revPref === "local_ai") {
+        setReviewBusy(true);
+        try {
+          if (revPref === "lt") {
+            setInfo("Revisão final do livro…");
+            const proposals = await invoke<DiffProposal[]>("check_lt_local", {
+              text: r.cleaned,
+            });
+            const done = await applyReviewNow(r, proposals, "languagetool-local");
+            out = done.result;
+            applied = done.applied;
+          } else {
+            setInfo("Revisão final do livro (IA)…");
+            const report = await invoke<ReviewReport>("propose_review", {
+              text: r.cleaned,
+            });
+            const done = await applyReviewNow(
+              r,
+              report.proposals,
+              report.engine || "ia-local",
+            );
+            out = done.result;
+            applied = done.applied;
+          }
+        } catch (e) {
+          setError(errText(e));
+        } finally {
+          setReviewBusy(false);
+        }
+      }
+
+      await promptAndSave(out, "md", applied);
       return "ok";
     } catch (e) {
       if (isCancelled(e)) {
@@ -311,30 +586,40 @@ function App() {
 
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
-      if (event.payload.type === "enter" || event.payload.type === "over") setDragging(true);
+      if (event.payload.type === "enter" || event.payload.type === "over")
+        setDragging(true);
       else if (event.payload.type === "drop") {
         setDragging(false);
         const path = event.payload.paths[0];
-        if (path) void handlePath(path);
+        if (!path) return;
+        setPendingOpen("drop");
+        setPendingDropPath(path);
+        if (localStorage.getItem(LS_WIZARD_DONE) !== "1") {
+          setWizardMode("first");
+          setWizardDraft(loadPrefs());
+          setWizardOpen(true);
+        } else {
+          setAskBookWizard(true);
+        }
       } else setDragging(false);
     });
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [handlePath]);
+  }, []);
 
-  async function openPdf() {
-    const picked = await open({
-      multiple: false,
-      filters: [{ name: "PDF", extensions: ["pdf"] }],
-      title: "Abrir PDF",
-    });
-    if (!picked) return;
-    const path = Array.isArray(picked) ? picked[0] : picked;
-    if (path) await handlePath(path);
-  }
-
-  async function openFolder() {
+  async function pickAndProcess(kind: "pdf" | "folder") {
+    if (kind === "pdf") {
+      const picked = await open({
+        multiple: false,
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+        title: "Abrir PDF",
+      });
+      if (!picked) return;
+      const path = Array.isArray(picked) ? picked[0] : picked;
+      if (path) await handlePath(path);
+      return;
+    }
     const picked = await open({
       directory: true,
       multiple: false,
@@ -343,6 +628,67 @@ function App() {
     if (!picked) return;
     const path = Array.isArray(picked) ? picked[0] : picked;
     if (path) await handlePath(path);
+  }
+
+  function applyPrefs(p: JobPrefs) {
+    setJobPrefs(p);
+    setLang(p.lang);
+    savePrefs(p);
+    prefsRef.current = p;
+    langRef.current = p.lang;
+  }
+
+  function finishWizard() {
+    applyPrefs(wizardDraft);
+    localStorage.setItem(LS_WIZARD_DONE, "1");
+    setWizardOpen(false);
+    const kind = pendingOpen;
+    const drop = pendingDropPath;
+    setPendingOpen(null);
+    setPendingDropPath(null);
+    if (kind === "drop" && drop) void handlePath(drop);
+    else if (kind === "pdf" || kind === "folder") void pickAndProcess(kind);
+  }
+
+  function requestStart(kind: "pdf" | "folder" | "drop", dropPath?: string) {
+    if (busy || wizardOpen || askBookWizard) return;
+    const firstDone = localStorage.getItem(LS_WIZARD_DONE) === "1";
+    if (!firstDone) {
+      setWizardMode("first");
+      setWizardDraft(jobPrefs);
+      setPendingOpen(kind);
+      setPendingDropPath(dropPath ?? null);
+      setWizardOpen(true);
+      return;
+    }
+    setPendingOpen(kind);
+    setPendingDropPath(dropPath ?? null);
+    setAskBookWizard(true);
+  }
+
+  function skipBookWizard() {
+    setAskBookWizard(false);
+    const kind = pendingOpen;
+    const drop = pendingDropPath;
+    setPendingOpen(null);
+    setPendingDropPath(null);
+    if (kind === "drop" && drop) void handlePath(drop);
+    else if (kind === "pdf" || kind === "folder") void pickAndProcess(kind);
+  }
+
+  function openBookWizard() {
+    setAskBookWizard(false);
+    setWizardMode("book");
+    setWizardDraft(jobPrefs);
+    setWizardOpen(true);
+  }
+
+  async function openPdf() {
+    requestStart("pdf");
+  }
+
+  async function openFolder() {
+    requestStart("folder");
   }
 
   async function requestStop(all: boolean) {
@@ -393,14 +739,12 @@ function App() {
     if (!result) return;
     setReviewBusy(true);
     setError(null);
+    setInfo("Revisando com IA local…");
     try {
       const report = await invoke<ReviewReport>("propose_review", {
         text: result.cleaned,
       });
-      setReview(report);
-      setAccepted(new Set(report.proposals.map((_, i) => i)));
-      setInfo(report.note);
-      setTextView("book");
+      await applyReviewNow(result, report.proposals, report.engine || "ia-local");
     } catch (e) {
       setError(errText(e));
     } finally {
@@ -412,24 +756,13 @@ function App() {
     if (!result) return;
     setReviewBusy(true);
     setError(null);
-    setInfo("Consultando LanguageTool…");
+    setInfo("Revisando com LanguageTool…");
     try {
       await invoke<string>("ensure_lt_server");
       const proposals = await invoke<DiffProposal[]>("check_lt_local", {
         text: result.cleaned,
       });
-      setReview({
-        proposals,
-        vocabulary: [],
-        engine: "LanguageTool",
-        note:
-          proposals.length === 0
-            ? "LanguageTool não apontou correções neste texto."
-            : `${proposals.length} sugestão(ões). Marque as que quiser e clique Aplicar.`,
-      });
-      setAccepted(new Set(proposals.map((_, i) => i)));
-      setInfo(null);
-      setTextView("book");
+      await applyReviewNow(result, proposals, "languagetool-local");
     } catch (e) {
       setError(errText(e));
       setInfo(null);
@@ -450,14 +783,7 @@ function App() {
       const proposals = await invoke<DiffProposal[]>("check_lt_premium", {
         text: result.cleaned,
       });
-      setReview({
-        proposals,
-        vocabulary: [],
-        engine: "LanguageTool Premium (nuvem)",
-        note: `${proposals.length} sugestão(ões) da nuvem. Revise antes de aplicar.`,
-      });
-      setAccepted(new Set());
-      setTextView("book");
+      await applyReviewNow(result, proposals, "LanguageTool Premium (nuvem)");
     } catch (e) {
       setError(errText(e));
     } finally {
@@ -537,10 +863,7 @@ function App() {
       const report = await invoke<ReviewReport>("check_cloud_ai", {
         text: result.cleaned,
       });
-      setReview(report);
-      setAccepted(new Set());
-      setInfo(report.note);
-      setTextView("book");
+      await applyReviewNow(result, report.proposals, report.engine || "cloud");
     } catch (e) {
       setError(errText(e));
     } finally {
@@ -548,53 +871,18 @@ function App() {
     }
   }
 
-  async function applyAccepted() {
-    if (!result || !review) return;
-    const list = review.proposals.filter((_, i) => accepted.has(i));
-    if (list.length === 0) {
-      setInfo("Nenhuma sugestão marcada.");
-      return;
-    }
-    try {
-      const next = await invoke<string>("apply_review_diffs", {
-        text: result.cleaned,
-        accepted: list,
-      });
-      setResult({ ...result, cleaned: next, pages: [] });
-      setAcceptedTrail((prev) => [...prev, ...list]);
-      setReview(null);
-      setAccepted(new Set());
-      setInfo(
-        `${list.length} correção(ões) aplicadas. Ainda não gravadas — use Salvar.`,
-      );
-      setTextView("book");
-      // Mostra o texto já revisado no topo da caixa.
-      requestAnimationFrame(() => jumpTo(0));
-    } catch (e) {
-      setError(errText(e));
-    }
-  }
-
-  /** Prévia local das propostas marcadas (só visual até Aplicar). */
-  function previewWithAccepted(
-    text: string,
-    proposals: DiffProposal[],
-    marked: Set<number>,
-  ): string {
-    const list = proposals
-      .map((p, i) => ({ p, i }))
-      .filter(({ i }) => marked.has(i))
-      .map(({ p }) => p)
-      .sort((a, b) => b.byte_offset - a.byte_offset);
-    let out = text;
-    for (const p of list) {
-      const from = Math.min(p.byte_offset, out.length);
-      let at = out.indexOf(p.original, from);
-      if (at < 0) at = out.indexOf(p.original);
-      if (at < 0) continue;
-      out = out.slice(0, at) + p.proposed + out.slice(at + p.original.length);
-    }
-    return out;
+  function undoReview() {
+    if (!result || !preReview) return;
+    setResult({
+      ...result,
+      cleaned: preReview.cleaned,
+      pages: preReview.pages,
+    });
+    setAcceptedTrail([]);
+    setPreReview(null);
+    setReview(null);
+    setInfo("Revisão desfeita.");
+    setTextView("book");
   }
 
   const s = result?.structure_stats ?? {};
@@ -626,14 +914,8 @@ function App() {
     return "Sugestões";
   }
 
-  const showingReviewPreview =
-    !!result && !!review && accepted.size > 0 && textView === "book";
-
   const displayText = (() => {
     if (!result) return "";
-    if (showingReviewPreview) {
-      return previewWithAccepted(result.cleaned, review.proposals, accepted);
-    }
     if (
       textView === "page" &&
       result.pages.length > 0 &&
@@ -645,415 +927,139 @@ function App() {
     return result.cleaned;
   })();
 
+  const fileTitle =
+    result?.source_name ??
+    (processingPath
+      ? processingPath.split(/[/\\]/).pop() ?? processingPath
+      : null);
+  const progressPct =
+    progress && progress.total > 0
+      ? Math.min(100, Math.round((100 * progress.done) / progress.total))
+      : 0;
+
   return (
-    <main className="shell">
+    <main className={`shell${dragging ? " is-dragging" : ""}`}>
       <header className="topbar">
         <span className="brand">TXTMelhorator</span>
-        <span className={`topbar-status${busy ? " is-busy" : ""}`}>
-          {busy
-            ? progress
-              ? `${queueLabel ? queueLabel + " · " : ""}Página ${progress.done} / ${progress.total}`
-              : `${queueLabel ? queueLabel + " · " : ""}Processando…`
-            : result
-              ? result.source_name
-              : "Abra um PDF para começar"}
+        <span className={`topbar-file${busy ? " is-busy" : ""}`}>
+          {fileTitle ?? "Abra um PDF para começar"}
         </span>
       </header>
 
-      <div className="workspace">
-        {/* —— Coluna 1: Abrir —— */}
-        <section className="col col-setup">
-          <div className="col-head">
-            <span className="col-title">Abrir</span>
-          </div>
-          <div className="col-body">
-            <div className="stack">
-              <button
-                type="button"
-                className="btn block"
-                onClick={() => void openPdf()}
-                disabled={busy}
-              >
-                Abrir PDF
-              </button>
-              <button
-                type="button"
-                className="btn ghost block"
-                onClick={() => void openFolder()}
-                disabled={busy}
-              >
-                Abrir pasta
-              </button>
-              {busy && (
-                <div className="stack-row">
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() => void requestStop(false)}
-                  >
-                    Pular
-                  </button>
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() => void requestStop(true)}
-                  >
-                    Parar
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="field">
-              <label htmlFor="ocr-lang">Idioma OCR</label>
-              <select
-                id="ocr-lang"
-                value={lang}
-                disabled={busy}
-                onChange={(e) => setLang(e.target.value as OcrLang)}
-              >
-                <option value="auto">Auto</option>
-                <option value="por+eng">Português + inglês</option>
-                <option value="por">Só português</option>
-                <option value="eng">Só inglês</option>
-              </select>
-            </div>
-
+      {/* Layout B — barra única */}
+      <div className="toolbar">
+        <button
+          type="button"
+          className="btn"
+          onClick={() => void openPdf()}
+          disabled={busy}
+        >
+          Abrir PDF
+        </button>
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={() => void openFolder()}
+          disabled={busy}
+        >
+          Abrir pasta
+        </button>
+        <span className="toolbar-sep" aria-hidden />
+        <button
+          type="button"
+          className="btn ghost"
+          disabled={!busy}
+          onClick={() => void requestStop(false)}
+        >
+          Pular
+        </button>
+        <button
+          type="button"
+          className="btn ghost"
+          disabled={!busy}
+          onClick={() => void requestStop(true)}
+        >
+          Parar
+        </button>
+        <div className="toolbar-progress">
+          <div className="toolbar-progress-track">
             <div
-              className={`dropzone ${dragging ? "dragging" : ""} ${busy ? "busy" : ""}`}
-            >
-              {busy ? "Lendo o livro…" : "Arraste PDF ou pasta"}
-              <small>{busy ? "Pular = este · Parar = fila" : "ou use os botões acima"}</small>
-            </div>
-
-            {error && <div className="banner error">{error}</div>}
-            {info && <div className="banner warn">{info}</div>}
-            {savedTo && <div className="banner ok">Salvo: {savedTo}</div>}
-
-            {result && (
-              <div className="stack">
-                <div className="stack-row">
-                  <button type="button" className="btn tiny" onClick={() => void saveAgain("md")}>
-                    .md
-                  </button>
-                  <button type="button" className="btn ghost tiny" onClick={() => void saveAgain("txt")}>
-                    .txt
-                  </button>
-                  <button type="button" className="btn ghost tiny" onClick={() => void saveAgain("docx")}>
-                    .docx
-                  </button>
-                </div>
-                {acceptedTrail.length > 0 && (
-                  <p className="hint">{acceptedTrail.length} correção(ões) ainda não salvas</p>
-                )}
-              </div>
-            )}
-
-            <div className="rail-tabs">
-              <button
-                type="button"
-                className={`btn ghost tiny${leftPanel === "revisao" ? " active" : ""}`}
-                disabled={!result}
-                onClick={() =>
-                  setLeftPanel((p) => (p === "revisao" ? "none" : "revisao"))
-                }
-              >
-                Revisão
-              </button>
-              <button
-                type="button"
-                className={`btn ghost tiny${leftPanel === "ajustes" ? " active" : ""}`}
-                onClick={() =>
-                  setLeftPanel((p) => (p === "ajustes" ? "none" : "ajustes"))
-                }
-              >
-                Ajustes
-              </button>
-            </div>
-
-            {leftPanel === "revisao" && result && (
-              <div className="rail-panel">
-                <h3>Revisão</h3>
-                <p className="hint">Só sugere. Nada entra sem você aceitar.</p>
-                <button
-                  type="button"
-                  className="btn block"
-                  disabled={reviewBusy}
-                  onClick={() => void runLtLocal()}
-                >
-                  {reviewBusy ? "Revisando…" : "LanguageTool"}
-                </button>
-                <button
-                  type="button"
-                  className="btn ghost block"
-                  disabled={reviewBusy}
-                  onClick={() => void runReview()}
-                >
-                  IA local
-                </button>
-                <button
-                  type="button"
-                  className="btn ghost block"
-                  disabled={reviewBusy}
-                  onClick={() => void runCloudAi()}
-                >
-                  IA na nuvem
-                </button>
-                <button
-                  type="button"
-                  className="btn ghost block"
-                  disabled={reviewBusy}
-                  onClick={() => void runLtPremium()}
-                >
-                  LT Premium
-                </button>
-              </div>
-            )}
-
-            {leftPanel === "ajustes" && (
-              <div className="rail-panel">
-                <h3>Regras do livro</h3>
-                <div className="rules-form">
-                  <select
-                    value={ruleKind}
-                    onChange={(e) => setRuleKind(e.target.value as RuleKind)}
-                  >
-                    <option value="header">Cabeçalho (remover)</option>
-                    <option value="note">Nota</option>
-                    <option value="no_join">Não juntar</option>
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="Trecho a reconhecer…"
-                    value={rulePattern}
-                    onChange={(e) => setRulePattern(e.target.value)}
-                  />
-                  <button type="button" className="btn ghost" onClick={() => void addRule()}>
-                    Adicionar regra
-                  </button>
-                </div>
-                {rules.length > 0 && (
-                  <ul className="rules-list">
-                    {rules.map((r, i) => (
-                      <li key={`${r.kind}-${r.pattern}-${i}`}>
-                        <span>
-                          {r.kind}: {r.pattern}
-                        </span>
-                        <button
-                          type="button"
-                          className="btn ghost tiny"
-                          onClick={() => void removeRule(i)}
-                        >
-                          Remover
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                <h3>LanguageTool</h3>
-                <div className="rules-form">
-                  <input
-                    type="text"
-                    value={ltUrl}
-                    onChange={(e) => setLtUrl(e.target.value)}
-                    placeholder="http://localhost:8081"
-                  />
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() => void discoverLanguageTool()}
-                  >
-                    Descobrir
-                  </button>
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() =>
-                      void invoke("save_lt_settings", {
-                        settings: { localUrl: ltUrl, premiumEnabled: true },
-                      })
-                        .then(() => setInfo("URL salva"))
-                        .catch((e) => setError(errText(e)))
-                    }
-                  >
-                    Salvar URL
-                  </button>
-                  <input
-                    type="text"
-                    placeholder="Premium username"
-                    value={ltUser}
-                    onChange={(e) => setLtUser(e.target.value)}
-                  />
-                  <input
-                    type="password"
-                    placeholder="API key"
-                    value={ltKey}
-                    onChange={(e) => setLtKey(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() =>
-                      void invoke("save_lt_premium_creds", {
-                        username: ltUser,
-                        apiKey: ltKey,
-                      })
-                        .then(() => {
-                          setLtKey("");
-                          setInfo("Credenciais no chaveiro");
-                        })
-                        .catch((e) => setError(errText(e)))
-                    }
-                  >
-                    Guardar no Mac
-                  </button>
-                </div>
-
-                <h3>IA local{gguf?.selected ? ` · ${gguf.selected}` : ""}</h3>
-                {modelOffers.length > 0 ? (
-                  <ul className="rules-list">
-                    {modelOffers.map((offer) => (
-                      <li key={offer.id}>
-                        <span>
-                          {offer.label} — {offer.detail}
-                        </span>
-                        <button
-                          type="button"
-                          className="btn ghost tiny"
-                          onClick={() => void installModelOffer(offer.id)}
-                        >
-                          {offer.available_locally ? "Usar" : "Baixar"}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="hint">Nenhum modelo listado.</p>
-                )}
-                <button
-                  type="button"
-                  className="btn ghost tiny"
-                  onClick={() => setShowModelUrlDownload((v) => !v)}
-                >
-                  {showModelUrlDownload ? "Ocultar URL" : "URL manual"}
-                </button>
-                {showModelUrlDownload && (
-                  <div className="rules-form">
-                    <input
-                      type="text"
-                      placeholder="URL .gguf"
-                      value={ggufUrl}
-                      onChange={(e) => setGgufUrl(e.target.value)}
-                    />
-                    <input
-                      type="text"
-                      placeholder="nome.gguf"
-                      value={ggufName}
-                      onChange={(e) => setGgufName(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      onClick={() =>
-                        void invoke("download_gguf_model", {
-                          url: ggufUrl,
-                          filename: ggufName || "model.gguf",
-                          sha256: null,
-                        })
-                          .then(() => {
-                            void refreshModels();
-                            void refreshModelOffers();
-                          })
-                          .catch((e) => setError(errText(e)))
-                      }
-                    >
-                      Baixar
-                    </button>
-                  </div>
-                )}
-
-                <h3>IA na nuvem</h3>
-                <p className="hint">O texto sai do computador.</p>
-                <div className="rules-form">
-                  <input
-                    type="text"
-                    placeholder="URL base …/v1"
-                    value={cloudUrl}
-                    onChange={(e) => setCloudUrl(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    placeholder="modelo"
-                    value={cloudModel}
-                    onChange={(e) => setCloudModel(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() =>
-                      void invoke("save_cloud_ai_settings", {
-                        settings: {
-                          baseUrl: cloudUrl,
-                          model: cloudModel,
-                          enabled: true,
-                        },
-                      })
-                        .then(() => setInfo("URL/modelo salvos"))
-                        .catch((e) => setError(errText(e)))
-                    }
-                  >
-                    Salvar
-                  </button>
-                  <input
-                    type="password"
-                    placeholder="API key"
-                    value={cloudKey}
-                    onChange={(e) => setCloudKey(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="btn ghost"
-                    onClick={() =>
-                      void invoke("save_cloud_ai_key", { apiKey: cloudKey })
-                        .then(() => {
-                          setCloudKey("");
-                          setInfo("Chave no chaveiro");
-                        })
-                        .catch((e) => setError(errText(e)))
-                    }
-                  >
-                    Guardar chave
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn ghost"
-                  disabled={busy}
-                  onClick={() => void clearData()}
-                >
-                  Limpar dados do app
-                </button>
-              </div>
-            )}
+              className="toolbar-progress-fill"
+              style={{ width: `${busy ? progressPct : 0}%` }}
+            />
           </div>
-        </section>
+          <span className="toolbar-progress-label">
+            {busy && progress
+              ? `${progress.done} / ${progress.total}`
+              : busy
+                ? "…"
+                : queueLabel
+                  ? queueLabel
+                  : "—"}
+          </span>
+        </div>
+        <label className="toolbar-ocr">
+          <span>OCR</span>
+          <select
+            id="ocr-lang"
+            value={lang}
+            disabled={busy}
+            onChange={(e) => {
+              const next = e.target.value as OcrLang;
+              applyPrefs({ ...jobPrefs, lang: next });
+            }}
+          >
+            <option value="auto">Automático</option>
+            <option value="por+eng">PT + EN</option>
+            <option value="por">Português</option>
+            <option value="eng">Inglês</option>
+          </select>
+        </label>
+        <span className="toolbar-prefs hint" title="Preferências desta transcrição (wizard)">
+          {jobPrefs.columns === "2+" ? "2+ col." : "1 col."}
+          {" · "}
+          {jobPrefs.illustrations ? "ilustrações" : "sem figuras"}
+          {" · "}
+          {jobPrefs.review === "lt"
+            ? "LT"
+            : jobPrefs.review === "local_ai"
+              ? "IA local"
+              : "sem revisão"}
+        </span>
+        <button
+          type="button"
+          className={`btn ghost${leftPanel === "revisao" ? " active" : ""}`}
+          disabled={!result}
+          onClick={() =>
+            setLeftPanel((p) => (p === "revisao" ? "none" : "revisao"))
+          }
+        >
+          Revisão
+        </button>
+        <button
+          type="button"
+          className={`btn ghost${leftPanel === "ajustes" ? " active" : ""}`}
+          onClick={() =>
+            setLeftPanel((p) => (p === "ajustes" ? "none" : "ajustes"))
+          }
+        >
+          Ajustes
+        </button>
+      </div>
 
-        {/* —— Coluna 2: PDF —— */}
+      {(error || info || savedTo) && (
+        <div className="banner-strip">
+          {error && <div className="banner error">{error}</div>}
+          {info && <div className="banner warn">{info}</div>}
+          {savedTo && <div className="banner ok">Salvo: {savedTo}</div>}
+        </div>
+      )}
+
+      <div className="workspace">
         <section className="col col-pdf">
           <div className="col-head">
             <span className="col-title">Original</span>
             {showPdfPane && (
-              <span className="hint">
-                {confPage}
-                {pdfPageTotal > 0 ? ` / ${pdfPageTotal}` : ""}
-                {busy ? " · lendo" : ""}
-              </span>
-            )}
-          </div>
-          {showPdfPane ? (
-            <>
               <div className="pdf-nav">
                 <button
                   type="button"
@@ -1063,12 +1069,19 @@ function App() {
                 >
                   Ant
                 </button>
-                <span className="hint">Página</span>
+                <span className="hint">
+                  {confPage}
+                  {pdfPageTotal > 0 ? ` / ${pdfPageTotal}` : ""}
+                  {busy ? " · lendo" : ""}
+                </span>
                 <button
                   type="button"
                   className="btn ghost tiny"
                   disabled={
-                    busy || pdfPageTotal < 1 || confPage >= pdfPageTotal || pageBusy
+                    busy ||
+                    pdfPageTotal < 1 ||
+                    confPage >= pdfPageTotal ||
+                    pageBusy
                   }
                   onClick={() =>
                     setConfPage((p) =>
@@ -1079,36 +1092,68 @@ function App() {
                   Próx
                 </button>
               </div>
-                <div className="page-frame">
-                  {pageImg ? (
-                    <img
-                      src={pageImg}
-                      alt={`Página ${confPage}`}
-                      className="page-raster"
-                    />
-                  ) : pageBusy ? (
-                    <span className="hint">Carregando…</span>
-                  ) : (
-                    <span className="hint">Sem imagem</span>
-                  )}
-                </div>
-            </>
+            )}
+          </div>
+          {showPdfPane ? (
+            <div className="page-frame">
+              {pageImg ? (
+                <img
+                  src={pageImg}
+                  alt={`Página ${confPage}`}
+                  className="page-raster"
+                />
+              ) : pageBusy ? (
+                <span className="hint">Carregando…</span>
+              ) : (
+                <span className="hint">Sem imagem</span>
+              )}
+            </div>
           ) : (
             <div className="page-frame empty">
-              <p className="empty-hint">O PDF aparece aqui</p>
+              <p className="empty-hint">
+                Abrir PDF / pasta — ou arraste para a janela
+              </p>
             </div>
           )}
         </section>
 
-        {/* —— Coluna 3: Texto —— */}
         <section className="col col-text">
           <div className="col-head">
             <span className="col-title">Texto</span>
+            {result && (
+              <div className="stack-row">
+                <button
+                  type="button"
+                  className="btn tiny"
+                  onClick={() => void saveAgain("md")}
+                >
+                  .md
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost tiny"
+                  onClick={() => void saveAgain("txt")}
+                >
+                  .txt
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost tiny"
+                  onClick={() => void saveAgain("docx")}
+                >
+                  .docx
+                </button>
+              </div>
+            )}
           </div>
           {busy && partialText && !result ? (
             <>
               <div className="text-toolbar">
-                <p className="hint">Bruto desta página — limpeza no final</p>
+                <p className="hint">
+                  {jobPrefs.review === "none"
+                    ? "Bruto desta página — limpeza no final"
+                    : "Texto revisado entra aqui enquanto a captura segue"}
+                </p>
               </div>
               <div className="book-pane">
                 <pre className="preview partial">{partialText}</pre>
@@ -1117,20 +1162,22 @@ function App() {
           ) : result ? (
             <>
               <div className="text-toolbar">
-                <h2 className="text-title">
-                  {queueLabel ? `${queueLabel} · ` : ""}
-                  {result.source_name}
-                </h2>
                 <div className="meta">
                   <span>{result.engine}</span>
                   <span>{result.languages_used}</span>
                   <span>{result.pages.length || "—"} págs.</span>
                   <span>
-                    {(s.h1 ?? 0) + (s.h2 ?? 0) + (s.h3 ?? 0) + (s.h4 ?? 0)} títulos
+                    {(s.h1 ?? 0) + (s.h2 ?? 0) + (s.h3 ?? 0) + (s.h4 ?? 0)}{" "}
+                    títulos
                   </span>
                   <span>{s.prose ?? 0} §</span>
                   <span>{c.hyphenations_joined ?? 0} hífens</span>
                 </div>
+                {acceptedTrail.length > 0 && (
+                  <p className="hint">
+                    {acceptedTrail.length} correção(ões) ainda não salvas
+                  </p>
+                )}
                 {result.warnings.length > 0 && (
                   <button
                     type="button"
@@ -1162,10 +1209,9 @@ function App() {
                     Fim
                   </button>
                 </div>
-                {showingReviewPreview && (
+                {preReview && (
                   <p className="hint">
-                    Prévia com {accepted.size} sugestão(ões) marcada(s) — ainda não
-                    gravadas. Clique Aplicar para confirmar.
+                    Revisão aplicada — Desfazer restaura o texto de antes.
                   </p>
                 )}
               </div>
@@ -1179,54 +1225,29 @@ function App() {
                   <div className="suggestions-head">
                     <strong>{mapReviewEngineLabel(review.engine)}</strong>
                     <div className="stack-row">
-                      <button
-                        type="button"
-                        className="btn ghost tiny"
-                        onClick={() =>
-                          setAccepted(new Set(review.proposals.map((_, i) => i)))
-                        }
-                      >
-                        Todas
-                      </button>
-                      <button
-                        type="button"
-                        className="btn ghost tiny"
-                        onClick={() => setAccepted(new Set())}
-                      >
-                        Nenhuma
-                      </button>
-                      <button
-                        type="button"
-                        className="btn tiny"
-                        onClick={() => void applyAccepted()}
-                      >
-                        Aplicar
-                      </button>
+                      {preReview && (
+                        <button
+                          type="button"
+                          className="btn ghost tiny"
+                          onClick={() => undoReview()}
+                        >
+                          Desfazer
+                        </button>
+                      )}
                     </div>
                   </div>
                   <p className="hint">{review.note}</p>
                   {review.proposals.length === 0 ? (
-                    <p className="hint">Nenhuma sugestão.</p>
+                    <p className="hint">Nada a corrigir.</p>
                   ) : (
                     <ul className="rules-list">
                       {review.proposals.map((p, i) => (
                         <li key={i}>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={accepted.has(i)}
-                              onChange={(e) => {
-                                const next = new Set(accepted);
-                                if (e.target.checked) next.add(i);
-                                else next.delete(i);
-                                setAccepted(next);
-                              }}
-                            />
-                            <span>
-                              <code>{p.original}</code> → <code>{p.proposed}</code>
-                              <span className="hint"> — {p.reason}</span>
-                            </span>
-                          </label>
+                          <span>
+                            <code>{p.original}</code> →{" "}
+                            <code>{p.proposed}</code>
+                            <span className="hint"> — {p.reason}</span>
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -1241,6 +1262,486 @@ function App() {
           )}
         </section>
       </div>
+
+      {leftPanel !== "none" && (
+        <>
+          <button
+            type="button"
+            className="drawer-backdrop"
+            aria-label="Fechar painel"
+            onClick={() => setLeftPanel("none")}
+          />
+          <aside className="drawer" aria-label={leftPanel === "revisao" ? "Revisão" : "Ajustes"}>
+            <div className="drawer-head">
+              <h2>{leftPanel === "revisao" ? "Revisão" : "Ajustes"}</h2>
+              <button
+                type="button"
+                className="btn ghost tiny"
+                onClick={() => setLeftPanel("none")}
+              >
+                Fechar
+              </button>
+            </div>
+            <div className="drawer-body">
+              {leftPanel === "revisao" && result && (
+                <div className="rail-panel">
+                  <p className="hint">
+                    Aplica as correções no texto. Desfazer se algo estranho.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn block"
+                    disabled={reviewBusy}
+                    onClick={() => void runLtLocal()}
+                  >
+                    {reviewBusy ? "Revisando…" : "LanguageTool"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost block"
+                    disabled={reviewBusy}
+                    onClick={() => void runReview()}
+                  >
+                    IA local
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost block"
+                    disabled={reviewBusy}
+                    onClick={() => void runCloudAi()}
+                  >
+                    IA na nuvem
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost block"
+                    disabled={reviewBusy}
+                    onClick={() => void runLtPremium()}
+                  >
+                    LT Premium
+                  </button>
+                </div>
+              )}
+
+              {leftPanel === "ajustes" && (
+                <div className="rail-panel">
+                  <h3>Regras do livro</h3>
+                  <div className="rules-form">
+                    <select
+                      value={ruleKind}
+                      onChange={(e) => setRuleKind(e.target.value as RuleKind)}
+                    >
+                      <option value="header">Cabeçalho (remover)</option>
+                      <option value="note">Nota</option>
+                      <option value="no_join">Não juntar</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Trecho a reconhecer…"
+                      value={rulePattern}
+                      onChange={(e) => setRulePattern(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => void addRule()}
+                    >
+                      Adicionar regra
+                    </button>
+                  </div>
+                  {rules.length > 0 && (
+                    <ul className="rules-list">
+                      {rules.map((r, i) => (
+                        <li key={`${r.kind}-${r.pattern}-${i}`}>
+                          <span>
+                            {r.kind}: {r.pattern}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn ghost tiny"
+                            onClick={() => void removeRule(i)}
+                          >
+                            Remover
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <h3>LanguageTool</h3>
+                  <div className="rules-form">
+                    <input
+                      type="text"
+                      value={ltUrl}
+                      onChange={(e) => setLtUrl(e.target.value)}
+                      placeholder="http://localhost:8081"
+                    />
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => void discoverLanguageTool()}
+                    >
+                      Descobrir
+                    </button>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() =>
+                        void invoke("save_lt_settings", {
+                          settings: { localUrl: ltUrl, premiumEnabled: true },
+                        })
+                          .then(() => setInfo("URL salva"))
+                          .catch((e) => setError(errText(e)))
+                      }
+                    >
+                      Salvar URL
+                    </button>
+                    <input
+                      type="text"
+                      placeholder="Premium username"
+                      value={ltUser}
+                      onChange={(e) => setLtUser(e.target.value)}
+                    />
+                    <input
+                      type="password"
+                      placeholder="API key"
+                      value={ltKey}
+                      onChange={(e) => setLtKey(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() =>
+                        void invoke("save_lt_premium_creds", {
+                          username: ltUser,
+                          apiKey: ltKey,
+                        })
+                          .then(() => {
+                            setLtKey("");
+                            setInfo("Credenciais no chaveiro");
+                          })
+                          .catch((e) => setError(errText(e)))
+                      }
+                    >
+                      Guardar no Mac
+                    </button>
+                  </div>
+
+                  <h3>IA local{gguf?.selected ? ` · ${gguf.selected}` : ""}</h3>
+                  {modelOffers.length > 0 ? (
+                    <ul className="rules-list">
+                      {modelOffers.map((offer) => (
+                        <li key={offer.id}>
+                          <span>
+                            {offer.label} — {offer.detail}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn ghost tiny"
+                            onClick={() => void installModelOffer(offer.id)}
+                          >
+                            {offer.available_locally ? "Usar" : "Baixar"}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="hint">Nenhum modelo listado.</p>
+                  )}
+                  <button
+                    type="button"
+                    className="btn ghost tiny"
+                    onClick={() => setShowModelUrlDownload((v) => !v)}
+                  >
+                    {showModelUrlDownload ? "Ocultar URL" : "URL manual"}
+                  </button>
+                  {showModelUrlDownload && (
+                    <div className="rules-form">
+                      <input
+                        type="text"
+                        placeholder="URL .gguf"
+                        value={ggufUrl}
+                        onChange={(e) => setGgufUrl(e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        placeholder="nome.gguf"
+                        value={ggufName}
+                        onChange={(e) => setGgufName(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn ghost"
+                        onClick={() =>
+                          void invoke("download_gguf_model", {
+                            url: ggufUrl,
+                            filename: ggufName || "model.gguf",
+                            sha256: null,
+                          })
+                            .then(() => {
+                              void refreshModels();
+                              void refreshModelOffers();
+                            })
+                            .catch((e) => setError(errText(e)))
+                        }
+                      >
+                        Baixar
+                      </button>
+                    </div>
+                  )}
+
+                  <h3>IA na nuvem</h3>
+                  <p className="hint">O texto sai do computador.</p>
+                  <div className="rules-form">
+                    <input
+                      type="text"
+                      placeholder="URL base …/v1"
+                      value={cloudUrl}
+                      onChange={(e) => setCloudUrl(e.target.value)}
+                    />
+                    <input
+                      type="text"
+                      placeholder="modelo"
+                      value={cloudModel}
+                      onChange={(e) => setCloudModel(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() =>
+                        void invoke("save_cloud_ai_settings", {
+                          settings: {
+                            baseUrl: cloudUrl,
+                            model: cloudModel,
+                            enabled: true,
+                          },
+                        })
+                          .then(() => setInfo("URL/modelo salvos"))
+                          .catch((e) => setError(errText(e)))
+                      }
+                    >
+                      Salvar
+                    </button>
+                    <input
+                      type="password"
+                      placeholder="API key"
+                      value={cloudKey}
+                      onChange={(e) => setCloudKey(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() =>
+                        void invoke("save_cloud_ai_key", { apiKey: cloudKey })
+                          .then(() => {
+                            setCloudKey("");
+                            setInfo("Chave no chaveiro");
+                          })
+                          .catch((e) => setError(errText(e)))
+                      }
+                    >
+                      Guardar chave
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    disabled={busy}
+                    onClick={() => void clearData()}
+                  >
+                    Limpar dados do app
+                  </button>
+                </div>
+              )}
+            </div>
+          </aside>
+        </>
+      )}
+      {askBookWizard && (
+        <div className="modal-root" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="drawer-backdrop"
+            aria-label="Cancelar"
+            onClick={() => {
+              setAskBookWizard(false);
+              setPendingOpen(null);
+              setPendingDropPath(null);
+            }}
+          />
+          <div className="modal-card">
+            <h2>Configurar esta transcrição?</h2>
+            <p className="hint">
+              Colunas, ilustrações, idioma e revisão (LanguageTool ou IA local)
+              deste scan/OCR.
+            </p>
+            <div className="stack-row modal-actions">
+              <button type="button" className="btn" onClick={() => openBookWizard()}>
+                Sim
+              </button>
+              <button type="button" className="btn ghost" onClick={() => skipBookWizard()}>
+                Não — usar última config
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {wizardOpen && (
+        <div className="modal-root" role="dialog" aria-modal="true" aria-labelledby="wiz-title">
+          {wizardMode !== "first" && (
+            <button
+              type="button"
+              className="drawer-backdrop"
+              aria-label="Fechar"
+              onClick={() => {
+                setWizardOpen(false);
+                setPendingOpen(null);
+                setPendingDropPath(null);
+              }}
+            />
+          )}
+          <div className="modal-card wizard-card">
+            <h2 id="wiz-title">
+              {wizardMode === "first"
+                ? "Bem-vindo — configuração do scan"
+                : "Configuração desta transcrição"}
+            </h2>
+            <p className="hint">
+              Define como este OCR/scan será lido e revisado. Colunas e
+              ilustrações guiam o app; idioma e revisão valem na hora. Revisão
+              aplica e permite Desfazer.
+            </p>
+
+            <fieldset className="wiz-field">
+              <legend>Colunas</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="cols"
+                  checked={wizardDraft.columns === "1"}
+                  onChange={() =>
+                    setWizardDraft((d) => ({ ...d, columns: "1" }))
+                  }
+                />
+                Uma coluna
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="cols"
+                  checked={wizardDraft.columns === "2+"}
+                  onChange={() =>
+                    setWizardDraft((d) => ({ ...d, columns: "2+" }))
+                  }
+                />
+                Duas ou mais
+              </label>
+            </fieldset>
+
+            <fieldset className="wiz-field">
+              <legend>Ilustrações</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="ill"
+                  checked={!wizardDraft.illustrations}
+                  onChange={() =>
+                    setWizardDraft((d) => ({ ...d, illustrations: false }))
+                  }
+                />
+                Não
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="ill"
+                  checked={wizardDraft.illustrations}
+                  onChange={() =>
+                    setWizardDraft((d) => ({ ...d, illustrations: true }))
+                  }
+                />
+                Sim (marcar `[figura]`)
+              </label>
+            </fieldset>
+
+            <fieldset className="wiz-field">
+              <legend>Língua do texto</legend>
+              <select
+                value={wizardDraft.lang}
+                onChange={(e) =>
+                  setWizardDraft((d) => ({
+                    ...d,
+                    lang: e.target.value as OcrLang,
+                  }))
+                }
+              >
+                <option value="auto">Automático</option>
+                <option value="por+eng">Português + inglês</option>
+                <option value="por">Português</option>
+                <option value="eng">Inglês</option>
+              </select>
+            </fieldset>
+
+            <fieldset className="wiz-field">
+              <legend>Revisão após extrair</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="rev"
+                  checked={wizardDraft.review === "none"}
+                  onChange={() =>
+                    setWizardDraft((d) => ({ ...d, review: "none" }))
+                  }
+                />
+                Nenhuma (só sob botão)
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="rev"
+                  checked={wizardDraft.review === "lt"}
+                  onChange={() =>
+                    setWizardDraft((d) => ({ ...d, review: "lt" }))
+                  }
+                />
+                LanguageTool local (aplica + Desfazer)
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="rev"
+                  checked={wizardDraft.review === "local_ai"}
+                  onChange={() =>
+                    setWizardDraft((d) => ({ ...d, review: "local_ai" }))
+                  }
+                />
+                IA local (aplica + Desfazer)
+              </label>
+            </fieldset>
+
+            <div className="stack-row modal-actions">
+              <button type="button" className="btn" onClick={() => finishWizard()}>
+                Continuar
+              </button>
+              {wizardMode === "book" && (
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => {
+                    setWizardOpen(false);
+                    setPendingOpen(null);
+                    setPendingDropPath(null);
+                  }}
+                >
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

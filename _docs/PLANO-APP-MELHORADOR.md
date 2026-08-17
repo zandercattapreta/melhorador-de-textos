@@ -64,7 +64,7 @@ Esses requisitos definem a linguagem do core. Comparativo das linguagens candida
 └──────────────────────┴────────────────────┴───────────────────┘
 ```
 
-Princípios preservados: pipeline central **determinístico**; toda revisão (LT ou IA) **só propõe diff** — o usuário aprova; hashes/`report.json` continuam como trilha de auditoria.
+Princípios preservados: pipeline central **determinístico**; revisão (LT ou IA) **aplica** correções com **Desfazer** e trilha de auditoria (`report.json` / diffs).
 
 **Arquivos e pastas no app:** nada de caminhos fixos. Origem (PDF/pasta) e destino são perguntados ao usuário (diálogos nativos do SO) e lembrados como preferência. Artefatos intermediários (temp de OCR, cache de modelos, `tessdata`) vivem no diretório de dados do app por SO (`~/Library/Application Support/…`, `%APPDATA%`, `~/.local/share/…`) — invisíveis ao usuário e limpáveis nas configurações.
 

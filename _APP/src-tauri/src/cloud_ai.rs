@@ -1,6 +1,6 @@
 // ==============================================================================
 // SCRIPT: cloud_ai.rs (txtmelhorator-app)
-// DESCRIÇÃO: Revisão via API OpenAI-compatível (nuvem) — só propõe diffs
+// DESCRIÇÃO: Revisão via API OpenAI-compatível (nuvem) — UI aplica + Desfazer
 // CHAMADO POR: comando Tauri check_cloud_ai
 // CONTRATO: texto SAI da máquina; usuário confirma; keychain guarda a chave
 // ==============================================================================

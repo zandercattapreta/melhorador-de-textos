@@ -20,5 +20,5 @@ Consulte as regras universais em:
 2. **PDFs e assets:** PDFs brutos e materiais de livro ficam em `_resources/` ou `_ originais/` (local-only) — nunca commitar.
 3. **Pipeline em lote:** OCR/processamento em massa de PDFs grandes exige autorização APAE (“Sim”).
 4. **Pipeline zero-IA:** extração, OCR, limpeza e estrutura sem LLM, embeddings ou OCR neural generativo. Só Tesseract/OCRmyPDF e regras.
-5. **Revisão IA (opt-in):** permitida só no aparelho, desligada por padrão, só propõe diff. Vocabulário do livro = termos da própria fonte. Regras que o usuário ensina vêm antes do modelo. Nada entra no texto sem aprovação humana.
+5. **Revisão IA/LT (opt-in):** no aparelho (ou nuvem com aviso); **aplica** correções; **Desfazer** restaura. Vocabulário do livro = termos da própria fonte. Regras do usuário vêm antes do modelo. Sem inventar conteúdo nem reescrever o autor.
 6. **Skills primeiro:** ler esta skill e o `AGENTS.md` antes de alterar código ou docs de processo.

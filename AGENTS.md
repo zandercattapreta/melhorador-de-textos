@@ -55,13 +55,14 @@ Padrão universal: `~docs/~work_guidelines/protocols/CODE_STYLE.md`.
 - Inventar ou “completar” texto do livro que não esteja na fonte OCR/PDF.
 - **Usar IA/LLM em extração, OCR, limpeza ou estrutura.** Essas etapas = Tesseract clássico + regras fixas + (no CLI) LanguageTool humano.
 
-**IA local permitida só na revisão (emenda 16/Ago):**
-- Opt-in, desligada por padrão, no aparelho (sem nuvem).
-- Só **propõe** diff; nada entra no texto sem o Zander aceitar.
-- Vocabulário do livro = lista de termos extraídos do próprio OCR/texto nativo, com âncora na fonte — não é invenção.
-- Regras que o usuário ensina (marca cabeçalho, nota, etc.) vêm **antes** de qualquer modelo; o modelo só entra se as regras não bastarem.
-- Proposta que adicione conteúdo sem âncora no original, ou reescreva o estilo do autor, é rejeitada.
-- LanguageTool (local ou Premium) continua válido como revisão sem LLM.
+**IA local permitida só na revisão (emenda 16/Ago; UX 16/Ago noite):**
+- Opt-in (wizard / botão), no aparelho (sem nuvem por padrão).
+- **Aplica** as correções no texto; lista o que mudou; **Desfazer** restaura o anterior.
+- Não inventa conteúdo sem âncora na fonte; não reescreve o estilo do autor.
+- Vocabulário do livro = termos extraídos do próprio OCR/texto nativo.
+- Regras do usuário vêm antes do modelo.
+- LanguageTool (local ou Premium) e IA na nuvem seguem o mesmo padrão de aplicar + Desfazer (nuvem com aviso).
+- Extração / OCR / limpeza / estrutura continuam **sem** LLM.
 
 ## Commit & PR
 

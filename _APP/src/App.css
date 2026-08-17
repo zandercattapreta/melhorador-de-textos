@@ -1,6 +1,6 @@
 /* ==============================================================================
  * SCRIPT: App.css (txtmelhorator-app)
- * DESCRIÇÃO: Layout editorial 3 colunas — tokens em tokens.css
+ * DESCRIÇÃO: Layout B — barra única + 2 colunas (Original | Texto); DS Melhorator
  * CHAMADO POR: App.tsx
  * CONTRATO: só tokens; texto do livro = protagonista
  * ============================================================================== */
@@ -12,6 +12,7 @@
 }
 
 .shell {
+  position: relative;
   height: 100vh;
   margin: 0;
   display: flex;
@@ -21,12 +22,27 @@
   overflow: hidden;
 }
 
+.shell.is-dragging::after {
+  content: "Solte o PDF ou a pasta";
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg) 88%, var(--accent));
+  border: 2px dashed var(--accent);
+  color: var(--accent);
+  font-size: var(--fs-section);
+  font-weight: 600;
+  pointer-events: none;
+}
+
 /* —— Topo fino —— */
 .topbar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   height: 40px;
   padding: 0 16px;
@@ -35,30 +51,117 @@
 }
 
 .brand {
+  flex-shrink: 0;
   font-size: var(--fs-section);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-.topbar-status {
+.topbar-file {
+  min-width: 0;
   font-size: var(--fs-meta);
   color: var(--text-2);
-  max-width: 55%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.topbar-status.is-busy {
+.topbar-file.is-busy {
   color: var(--accent);
 }
 
-/* —— Grade 3 colunas —— */
+/* —— Layout B: barra única —— */
+.toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.toolbar-progress {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 8px;
+}
+
+.toolbar-progress-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.toolbar-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--motion-base);
+}
+
+.toolbar-progress-label {
+  flex-shrink: 0;
+  font-size: var(--fs-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.toolbar-ocr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+
+.toolbar-ocr select {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+
+.toolbar-ocr select:disabled {
+  opacity: 0.45;
+}
+
+.banner-strip {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* —— Grade 2 colunas —— */
 .workspace {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0;
 }
 
@@ -80,7 +183,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 36px;
+  min-height: 36px;
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
@@ -92,26 +195,6 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-2);
-}
-
-.col-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.col-pdf .col-body {
-  padding: 0;
-  gap: 0;
-}
-
-.col-text .col-body {
-  padding: 0;
-  gap: 0;
 }
 
 /* —— Controles —— */
@@ -128,15 +211,17 @@
 }
 
 .btn {
-  height: 32px;
-  padding: 0 12px;
+  height: 34px;
+  padding: 0 14px;
   border: none;
   border-radius: var(--radius-control);
   background: var(--accent);
   color: var(--accent-fg);
   font-family: var(--font-ui);
   font-size: var(--fs-ui);
+  font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .btn:hover:not(:disabled) {
@@ -152,6 +237,7 @@
   background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
+  font-weight: 600;
 }
 
 .btn.ghost:hover:not(:disabled) {
@@ -169,6 +255,7 @@
   height: 26px;
   padding: 0 8px;
   font-size: var(--fs-meta);
+  font-weight: 500;
 }
 
 .btn.block {
@@ -203,37 +290,10 @@
 .field select:focus,
 .field input:focus,
 .btn:focus-visible,
-.seg button:focus-visible {
+.seg button:focus-visible,
+.toolbar-ocr select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
-}
-
-.dropzone {
-  padding: 16px 12px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-card);
-  background: var(--surface);
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  transition:
-    border-color var(--motion-base),
-    background var(--motion-base);
-}
-
-.dropzone.dragging {
-  border-color: var(--accent);
-  background: var(--surface-2);
-}
-
-.dropzone.busy {
-  color: var(--text-2);
-}
-
-.dropzone small {
-  color: var(--text-2);
-  font-size: var(--fs-meta);
 }
 
 .banner {
@@ -275,27 +335,70 @@ button.banner.warn-click {
   margin: 0;
 }
 
-/* —— Painéis recolhíveis no rail —— */
-.rail-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
+/* —— Drawer (Revisão / Ajustes) —— */
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: rgba(31, 31, 35, 0.28);
+  cursor: pointer;
+}
+
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  width: min(380px, 92vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+
+.drawer-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 48px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.drawer-head h2 {
+  margin: 0;
+  font-size: var(--fs-section);
+  font-weight: 600;
+}
+
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
 }
 
 .rail-panel {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  background: var(--surface);
-  padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
 .rail-panel h3 {
-  margin: 0;
+  margin: 12px 0 0;
   font-size: var(--fs-ui);
   font-weight: 600;
+}
+
+.rail-panel h3:first-child {
+  margin-top: 0;
 }
 
 .rules-form {
@@ -344,14 +447,9 @@ button.banner.warn-click {
 
 /* —— PDF —— */
 .pdf-nav {
-  flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
 }
 
 .page-frame {
@@ -361,7 +459,7 @@ button.banner.warn-click {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 12px;
+  padding: 28px;
   background: var(--surface-2);
 }
 
@@ -373,7 +471,7 @@ button.banner.warn-click {
   max-width: 100%;
   height: auto;
   display: block;
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
   background: #fff;
 }
 
@@ -386,15 +484,6 @@ button.banner.warn-click {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
-}
-
-.text-title {
-  margin: 0;
-  font-size: var(--fs-ui);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .meta {
@@ -433,7 +522,7 @@ button.banner.warn-click {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 20px 24px 32px;
+  padding: 24px 28px 32px;
   background: var(--surface);
 }
 
@@ -484,6 +573,87 @@ button.banner.warn-click {
   color: var(--text-2);
   font-size: var(--fs-ui);
   padding: 24px;
+}
+
+.toolbar-prefs {
+  flex-shrink: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* —— Modais (wizard / pergunta) —— */
+.modal-root {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal-card {
+  position: relative;
+  z-index: 51;
+  width: min(440px, 100%);
+  max-height: min(90vh, 640px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-card h2 {
+  margin: 0;
+  font-size: var(--fs-section);
+  font-weight: 600;
+}
+
+.modal-actions {
+  margin-top: 4px;
+}
+
+.wiz-field {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wiz-field legend {
+  padding: 0 4px;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.wiz-field label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+
+.wiz-field select {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui);
 }
 
 @media (prefers-reduced-motion: reduce) {

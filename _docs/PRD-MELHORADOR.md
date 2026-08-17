@@ -45,13 +45,13 @@ O CLI **não some**. Ele congela o comportamento de referência. O core Rust pro
 |---|---|
 | **Fidelidade** | Nunca completar, adivinhar ou reescrever o livro. Palavra ilegível permanece ilegível e é sinalizada. |
 | **Zero-IA no pipeline** | Extração, limpeza e estrutura: OCR clássico (Tesseract) + regras fixas. Sem LLM, OCR neural generativo ou embeddings. |
-| **Revisão só propõe** | LanguageTool, regras que o usuário ensinou e IA local geram diff. Nada entra no texto final sem o humano aceitar. |
+| **Revisão aplica + Desfazer** | LanguageTool, regras ensinadas e IA local/nuvem **aplicam** correções. Lista o que mudou; Desfazer restaura. Sem inventar conteúdo nem reescrever o autor. |
 | **Auditabilidade** | Hashes, métricas e avisos. CLI grava `report.json`. App ainda não replica esse contrato por completo. |
 | **Obras fora do git** | PDFs e saídas em `_originais/`, `_output/`, `_temp/`. No app, origem e destino são escolhidos pelo usuário. |
 
-**IA local (emenda 16/Ago):** permitida **só como revisão opt-in**, desligada por padrão, no aparelho. Não entra em extração, OCR, limpeza nem estrutura. Vocabulário do livro = termos extraídos do próprio texto (âncora na fonte). Modelo que inventar ou reescrever estilo é reprovado. Ver `AGENTS.md`.
+**IA local (emenda 16/Ago):** permitida **só como revisão opt-in**, no aparelho. Não entra em extração, OCR, limpeza nem estrutura. **Aplica** correções + **Desfazer**. Vocabulário do livro = termos do próprio texto. Modelo que inventar ou reescrever estilo é reprovado.
 
-**IA na nuvem (emenda 16/Ago — 3ª opção de revisão):** o usuário pode enviar o texto a uma API de sua preferência (formato OpenAI: URL + modelo + chave). Opt-in com aviso explícito de que o texto sai do computador. Continua só propondo diff.
+**IA na nuvem:** API do usuário (OpenAI-compatible). Opt-in com aviso. Também aplica + Desfazer.
 
 ## 5. Rotina do app (alvo de produto)
 
@@ -91,7 +91,7 @@ Usuário abre o app
 | M5 | Marcar sumário, ficha técnica/catalográfica, bibliografia, imagens | 🔶 sumário/ficha parciais; imagens ⬜ |
 | M6 | Concatenar parágrafos partidos (página e coluna) | 🔶 carry frágil; Paideia “era ne/cessário” ainda quebra |
 | M7 | Regras que o usuário ensina (marca o que é cabeçalho, nota, etc.) | ⬜ preferências locais; **não** treina extração |
-| M8 | IA local revisa o texto (só propõe diff) | ⬜ |
+| M8 | IA local revisa o texto (aplica + Desfazer) | ✅ app |
 | M9 | Vocabulário do livro alimenta essa IA (termos da própria fonte) | ⬜ |
 | M10 | Conferência lado a lado (página original \| texto) | ⬜ |
 

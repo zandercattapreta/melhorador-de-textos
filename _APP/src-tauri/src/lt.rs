@@ -1,6 +1,6 @@
 // ==============================================================================
 // SCRIPT: lt.rs (txtmelhorator-app)
-// DESCRIÇÃO: LanguageTool local (URL) + Premium (keychain) — só propõe
+// DESCRIÇÃO: LanguageTool local (URL) + Premium (keychain) — UI aplica + Desfazer
 // CHAMADO POR: comandos Tauri check_lt_*
 // CONTRATO (RESPOSTA ESPERADA): DiffProposal[]; Premium avisa nuvem
 // ==============================================================================

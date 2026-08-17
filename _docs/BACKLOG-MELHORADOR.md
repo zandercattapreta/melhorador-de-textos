@@ -34,7 +34,7 @@ Fila de construção do **app** = **R1 → R5** (R5c aberta) · redesign UI = **
 - [x] Vocabulário + guardrail + diff aceitar/rejeitar
 - [x] Benchmark de fidelidade pt-BR (teste `fidelity_benchmark_ok`)
 - [x] Gerenciador GGUF (download+hash, remoção, seleção; CoTypist Gemma)
-- [x] UI: botão IA local / nuvem / LT
+- [x] UI: botão IA local / nuvem / LT (aplica + Desfazer; sem checklist de sugestões)
 - [x] **R5c — Inferência embutida:** `llama.cpp` linkado no binário (`llama-cpp-2` + Metal); **sem** `llama-cli`/Ollama/app externo
 - [x] Remover dependência de binário no PATH
 - [~] PoC antigo via `llama-cli` no PATH — **removido** (16/Ago)
@@ -62,7 +62,9 @@ Pedido Zander 16/Ago: redesenhar a interface via skill Claude Design / `frontend
 
 | ID | Entrega | Estado |
 |---|---|---|
-| **U1** | Layout 3 colunas fixas: **Abrir** \| **Original** \| **Texto** | ✅ parcial |
+| **U1** | Layout B (16/Ago): barra única + 2 colunas Original \| Texto; drawer Ajustes/Revisão | ✅ |
+| **U1b** | Wizard config: 1º run + pergunta antes de cada **transcrição/scan** (colunas, ilustrações, idioma, LT/IA) | ✅ |
+| **U1c** | Revisão em paralelo com OCR (texto já revisado na caixa) | ❌ **quebrado** — trava (reload GGUF/página); Zander EOD 16/Ago |
 | **U2** | Tipografia Source Serif 4 no texto do livro; rail quieto | ✅ |
 | **U3** | Revisão / Ajustes / modelos / LT em painéis recolhidos (não entulham) | ✅ |
 | **U4** | Remover slogans e ruído de UI | ✅ |

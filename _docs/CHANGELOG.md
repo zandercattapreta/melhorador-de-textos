@@ -8,6 +8,13 @@ atualizado_em: 2026-08-16
 
 Histórico detalhado anterior ao reset: `_historico/2026-08-01_pre-reset/CHANGELOG.md`.
 
+## [app] 2026-08-16 — EOD (sessão incompleta / handover)
+
+- Rename produto **TXTMelhorator** (app, CLI `txtmelhorator`, crates, GitHub `txtmelhorator`).
+- Layout B + tokens DS Melhorator; wizard de transcrição/scan.
+- Revisão: aplica + Desfazer; hifenação na revisão.
+- **Bloqueio:** IA local durante OCR recarrega GGUF (~6 GiB) por página → rainbow wheel; U1c marcado quebrado. Handover: `HANDOVER-2026-08-16-EOD.md`.
+
 ## [docs] 2026-08-16
 
 - PRD único: `PRD-MELHORADOR.md` cobre App desktop + CLI. `PRD.md` rotacionado para `_historico/2026-08-16_PRD-pre-pivo.md`.

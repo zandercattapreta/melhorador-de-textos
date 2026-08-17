@@ -1,11 +1,19 @@
-# Task — Revisão LT + IA opt-in
+# Task — P0 revisão ao vivo (handover)
 
-Estado: em execução (pedido Zander 16/Ago: “quero implementar isso já”).
+Estado: **bloqueado / falhou UAT**. Zander passou a outra IA.
 
-Escopo:
-1. LT = revisão principal (sugere correções OCR)
-2. IA local = mesma função, opt-in
-3. Ambas só propõem; aceitar na UI; salvar com trilha
+## Pedido (não diluir)
 
-Fora: notarização Apple.
-Pendente produto: **R5c** — embutir llama.cpp no binário (sem llama-cli externo).
+Captura OCR **e** revisão (LT/IA) **ao mesmo tempo**. Caixa de texto = texto já melhorado. Sem travar. Sem checklist.
+
+## Causa raiz (evidência)
+
+- `propose_review` sync + `llama_infer::generate` recarrega ~6 GB **por página**
+- Log: **17 recargas** GGUF numa sessão
+- Zander **NÃO** autorizou “IA só no fim” como solução
+
+## Próximo passo
+
+Desenhar runtime: modelo **uma vez**, comando **async**, fila; UAT antes de mais features.
+
+Ver: `_docs/HANDOVER-2026-08-16-EOD.md`

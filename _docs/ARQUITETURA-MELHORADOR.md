@@ -63,7 +63,9 @@ Mapa do que o produto **deve** usar. Ordem de construção: R1 → R5 no backlog
 | **structure** | H1–H4, sumário, listas | ✅ aprimorado | ✅ |
 | **layout** | Colunas, juntas página/coluna, blocos (sumário/ficha/bib/imagens), tabelas/notas | 🔶 parcial | ✅ (A13, R2) |
 
-### 2.2 Revisão (só propõe)
+### 2.2 Revisão (aplica + Desfazer)
+
+LanguageTool e/ou IA geram diffs e a UI **aplica** no texto; lista o que mudou; **Desfazer** restaura o snapshot anterior. Sem inventar conteúdo.
 
 | Peça | Papel | Hoje | Alvo |
 |---|---|---|---|
